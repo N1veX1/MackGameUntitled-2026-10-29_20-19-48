@@ -42,6 +42,7 @@ public sealed class MaskAxisCamera : MonoBehaviour
     [SerializeField] private Key zAxisKey = Key.Digit3;
 
     public bool MaskEnabled { get; private set; }
+    public bool InputLocked { get; set; }
     public int UnlockedAxis { get; private set; } = 2;
     public Renderer[] ObstacleRenderers => wallRenderers;
     public Collider[] ObstacleColliders => wallColliders;
@@ -106,7 +107,7 @@ public sealed class MaskAxisCamera : MonoBehaviour
 
     private void Update()
     {
-        if (keyboardEnabled)
+        if (keyboardEnabled && !InputLocked)
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null) return;

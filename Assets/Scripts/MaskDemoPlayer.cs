@@ -22,6 +22,15 @@ public sealed class MaskDemoPlayer : MonoBehaviour
     public Vector3 Checkpoint => checkpoint;
     public Transform HeadVisualPivot => headVisualPivot;
     public void SetCheckpoint(Vector3 position) { checkpoint = position; checkpointRotation = transform.rotation; }
+    public void TeleportTo(Vector3 position, Quaternion rotation)
+    {
+        if (mask) mask.ResetAfterRespawn();
+        controller.enabled = false;
+        transform.SetPositionAndRotation(position, rotation);
+        ResetMotion();
+        controller.enabled = true;
+        Physics.SyncTransforms();
+    }
     public void Respawn()
     {
         if (!controller) return;

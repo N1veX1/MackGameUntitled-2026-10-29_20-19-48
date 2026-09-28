@@ -64,6 +64,8 @@ public sealed class MaskProximityWall : MonoBehaviour
     ShadowCastingMode[] shadows;
     Transform player;
     bool activeDimension;
+    bool passageOpen;
+    bool deathPending;
     Renderer mergeSurface;
     MaskBackingAppearance backingAppearance;
     public bool IsAppearanceMatched { get; private set; }
@@ -112,7 +114,63 @@ public sealed class MaskProximityWall : MonoBehaviour
         RegisterActiveWall();
         SubscribeToCamera();
     }
-    public void SetDimension(bool active) => activeDimension = active;
+    public void SetDimension(bool active)
+    {
+        if (activeDimension && !active && passageOpen && PlayerOverlapsWall()) deathPending = true;
+        activeDimension = active;
+    }
+
+    // Capsule versus oriented boxes. Unlike collider.bounds this also works
+    // while the obstacle's collider is disabled for passage.
+    public bool PlayerOverlapsWall(float inset = .035f)
+    {
+        var body = player ? player.GetComponent<CharacterController>() : null;
+        if (!body || solids == null) return false;
+        Vector3 scale = player.lossyScale;
+        float radius = body.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+        float halfSegment = Mathf.Max(0, body.height * Mathf.Abs(scale.y) * .5f - radius);
+        Vector3 center = player.TransformPoint(body.center);
+        Vector3 a = center + player.up * halfSegment, b = center - player.up * halfSegment;
+        radius = Mathf.Max(.01f, radius - inset);
+        for (int i = 0; i < solids.Length; i++)
+        {
+            if (!solids[i] || !collisionStates[i]) continue;
+            Vector3 localA, localB, extents;
+            if (solids[i] is BoxCollider box)
+            {
+                Quaternion inverse = Quaternion.Inverse(box.transform.rotation);
+                Vector3 origin = box.transform.TransformPoint(box.center);
+                localA = inverse * (a - origin); localB = inverse * (b - origin);
+                Vector3 size = Vector3.Scale(box.size, box.transform.lossyScale);
+                extents = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z)) * .5f;
+            }
+            else
+            {
+                var surface = solids[i].GetComponent<Renderer>();
+                if (!surface) continue;
+                Bounds bounds = surface.bounds;
+                localA = a - bounds.center; localB = b - bounds.center; extents = bounds.extents;
+            }
+            // Squared segment-to-box distance is convex over the capsule axis.
+            float lo = 0, hi = 1;
+            for (int n = 0; n < 18; n++)
+            {
+                float t1 = Mathf.Lerp(lo, hi, 1f / 3f), t2 = Mathf.Lerp(lo, hi, 2f / 3f);
+                if (BoxDistance(Vector3.Lerp(localA, localB, t1), extents) <
+                    BoxDistance(Vector3.Lerp(localA, localB, t2), extents)) hi = t2;
+                else lo = t1;
+            }
+            if (BoxDistance(Vector3.Lerp(localA, localB, (lo + hi) * .5f), extents) < radius * radius) return true;
+        }
+        return false;
+    }
+
+    static float BoxDistance(Vector3 point, Vector3 extents)
+    {
+        Vector3 outside = new Vector3(Mathf.Max(0, Mathf.Abs(point.x) - extents.x),
+            Mathf.Max(0, Mathf.Abs(point.y) - extents.y), Mathf.Max(0, Mathf.Abs(point.z) - extents.z));
+        return outside.sqrMagnitude;
+    }
     void OnEnable()
     {
         RegisterActiveWall();
@@ -130,6 +188,8 @@ public sealed class MaskProximityWall : MonoBehaviour
     }
     void ForceSolidDuringTransition()
     {
+        // Defer respawn until LateUpdate so the camera transition finishes its call.
+        if (passageOpen && PlayerOverlapsWall()) deathPending = true;
         Opacity = 1;
         backingAppearance?.Restore(); IsAppearanceMatched = false;
         if (surfaces == null) return;
@@ -140,13 +200,24 @@ public sealed class MaskProximityWall : MonoBehaviour
             surfaces[i].sharedMaterials = originals[i];
             surfaces[i].shadowCastingMode = shadows[i];
         }
-        // Keep colliders untouched here. Tick restores them only after its
-        // occupancy check, so changing views cannot trap a player inside a wall.
+        // Tick resolves an occupied returning wall before restoring collision.
     }
     void LateUpdate() => Tick(Time.deltaTime);
     public void Tick(float deltaTime)
     {
         if (surfaces == null) return;
+        if (passageOpen && PlayerOverlapsWall() &&
+            (!activeDimension || (cameraEffects && !cameraEffects.IsViewSettled))) deathPending = true;
+        if (deathPending)
+        {
+            deathPending = false;
+            if (player && PlayerOverlapsWall())
+            {
+                var movement = player.GetComponent<MaskDemoPlayer>();
+                if (movement) { movement.Respawn(); Restore(); return; }
+            }
+        }
+        bool occupied = passageOpen && PlayerOverlapsWall(0);
         float distance = float.PositiveInfinity;
         if (player)
             foreach (var surface in surfaces)
@@ -154,11 +225,13 @@ public sealed class MaskProximityWall : MonoBehaviour
         var head = player ? player.GetComponent<CharacterController>() : null;
         if (head) distance = Mathf.Max(0, distance - head.radius);
         float target = 1;
-        bool aligned = activeDimension && cameraEffects && cameraEffects.IsViewSettled && CanVisiblyMerge();
+        bool aligned = activeDimension && cameraEffects && cameraEffects.IsViewSettled &&
+            (occupied || CanVisiblyMerge());
         if (aligned)
             target = requireProximity
                 ? Mathf.SmoothStep(0, 1, Mathf.InverseLerp(fullyTransparentDistance, Mathf.Max(visibleDistance, fullyTransparentDistance + .1f), distance))
                 : 0;
+        if (aligned && occupied) target = 0;
         Opacity = cameraEffects && !cameraEffects.IsViewSettled
             ? 1f
             : Mathf.MoveTowards(Opacity, target, deltaTime / Mathf.Max(.01f, target < Opacity ? fadeSeconds : reappearSeconds));
@@ -182,16 +255,15 @@ public sealed class MaskProximityWall : MonoBehaviour
                 Color color = originals[i][j].GetColor(property); color.a *= Opacity; mat.SetColor(property, color);
             }
         }
-        var body = player ? player.GetComponent<CharacterController>() : null;
-        for (int i=0;i<solids.Length;i++)
+        for (int i = 0; i < solids.Length; i++)
         {
             if (!solids[i]) continue;
-            // Do not recreate collision inside the player's capsule when leaving X.
-            bool occupied = !solids[i].enabled && body && solids[i].GetComponent<Renderer>() &&
-                solids[i].GetComponent<Renderer>().bounds.Intersects(body.bounds);
-            solids[i].enabled = collisionStates[i] && Opacity > .15f && !occupied;
+            solids[i].enabled = collisionStates[i] && Opacity > .15f;
         }
+        if (Opacity <= .15f) passageOpen = true;
+        else if (!occupied) passageOpen = false;
     }
+
     // Test the actual game camera, not Scene-view visibility or distance alone.
     public bool CanVisiblyMerge()
     {
@@ -216,9 +288,10 @@ public sealed class MaskProximityWall : MonoBehaviour
                 if (!own && !character && hit.distance < entry - .025f) { blocked = true; break; }
             }
             if (blocked) continue;
-            // The adjacent surface must occupy the same projected location behind the obstacle.
+            // Cast from the visible face. Perpendicular walls may physically join
+            // inside each other; their matching surface need not lie beyond the far face.
             float extent = Mathf.Abs(direction.x) * bounds.extents.x + Mathf.Abs(direction.y) * bounds.extents.y + Mathf.Abs(direction.z) * bounds.extents.z;
-            Ray behind = new Ray(point + direction * (extent + .02f), direction);
+            Ray behind = new Ray(point - direction * (extent + .02f), direction);
             if (!mergeSurface || (mergeSurface.enabled && mergeSurface.bounds.IntersectRay(behind, out _))) return true;
         }
         return false;
@@ -237,7 +310,7 @@ public sealed class MaskProximityWall : MonoBehaviour
             for (int y = -1; y <= 1; y += 2)
             {
                 Vector3 point = obstacle.center + right * (x * halfWidth) + up * (y * halfHeight);
-                if (!mergeSurface.bounds.IntersectRay(new Ray(point + forward * depth, forward), out _)) return false;
+                if (!mergeSurface.bounds.IntersectRay(new Ray(point - forward * depth, forward), out _)) return false;
             }
         return true;
     }
@@ -247,7 +320,7 @@ public sealed class MaskProximityWall : MonoBehaviour
 
     public void Restore()
     {
-        activeDimension = false; Opacity = 1;
+        activeDimension = false; passageOpen = false; deathPending = false; Opacity = 1;
         backingAppearance?.Restore(); IsAppearanceMatched = false;
         if (surfaces == null) return;
         for(int i=0;i<surfaces.Length;i++) if(surfaces[i]) { surfaces[i].enabled = rendererStates[i]; surfaces[i].sharedMaterials = originals[i]; surfaces[i].shadowCastingMode = shadows[i]; }
