@@ -65,13 +65,16 @@ public sealed class MaskSixTrialLevel : MonoBehaviour
             enabled = false;
             return;
         }
+        RepairMissingMergeSurfaces();
         var effects = mask.GetComponent<MaskViewEffects>();
         for (int i = 0; i < trials.Length; i++)
         {
             var trial = trials[i];
             if (!trial.obstacle || !trial.mergeSurface || !trial.approachPoint)
             {
-                Debug.LogError("Missing wall, backing or approach point in trial " + i, this);
+                Debug.LogError("Trial " + trial.direction + " is missing: " +
+                    (!trial.obstacle ? "Obstacle " : "") + (!trial.mergeSurface ? "Merge Surface " : "") +
+                    (!trial.approachPoint ? "Approach Point" : ""), this);
                 enabled = false;
                 return;
             }
@@ -89,6 +92,62 @@ public sealed class MaskSixTrialLevel : MonoBehaviour
         if (door) closedDoorPosition = door.localPosition;
         player.Respawned += OnRespawn;
     }
+
+    [ContextMenu("Repair missing merge surfaces")]
+    public void RepairMissingMergeSurfaces()
+    {
+        if (trials == null) return;
+        // A neighbouring wall may be replaced or combined while editing the level.
+        // Recover only missing links, using actual geometry rather than object names.
+        var candidates = FindObjectsByType<Renderer>(FindObjectsInactive.Exclude);
+        foreach (var trial in trials)
+        {
+            if (!trial.obstacle || trial.mergeSurface) continue;
+            var obstacle = trial.obstacle.GetComponentInChildren<Renderer>();
+            if (!obstacle) continue;
+            Bounds bounds = obstacle.bounds;
+            Vector3 forward = trial.direction switch {
+                MaskAxisCamera.ViewDirection.X => Vector3.left,
+                MaskAxisCamera.ViewDirection.MinusX => Vector3.right,
+                MaskAxisCamera.ViewDirection.Y => Vector3.down,
+                MaskAxisCamera.ViewDirection.MinusY => Vector3.up,
+                MaskAxisCamera.ViewDirection.Z => Vector3.back,
+                _ => Vector3.forward
+            };
+            Vector3 up = Mathf.Abs(forward.y) > .5f ? Vector3.forward : Vector3.up;
+            Vector3 right = Vector3.Cross(up, forward);
+            float width = Extent(bounds.extents, right) * .995f;
+            float height = Extent(bounds.extents, up) * .995f;
+            float depth = Extent(bounds.extents, forward) + .02f;
+            float best = float.PositiveInfinity;
+            foreach (var candidate in candidates)
+            {
+                if (!candidate.enabled || candidate.gameObject.scene != gameObject.scene ||
+                    !candidate.TryGetComponent<Collider>(out var solid) || !solid.enabled || solid.isTrigger) continue;
+                bool excluded = player && candidate.transform.IsChildOf(player.transform);
+                foreach (var other in trials)
+                    if (other.obstacle && candidate.transform.IsChildOf(other.obstacle.transform)) excluded = true;
+                if (excluded) continue;
+                Bounds backing = candidate.bounds;
+                float separation = Vector3.Dot(backing.center - bounds.center, forward);
+                if (separation <= 0 || separation > 12 || separation >= best) continue;
+                bool fits = true;
+                for (int x = -1; x <= 1; x += 2)
+                    for (int y = -1; y <= 1; y += 2)
+                    {
+                        Vector3 start = bounds.center + right * (width * x) + up * (height * y) - forward * depth;
+                        if (!backing.IntersectRay(new Ray(start, forward), out _)) fits = false;
+                    }
+                if (!fits) continue;
+                trial.mergeSurface = candidate;
+                best = separation;
+            }
+            if (trial.mergeSurface && !trial.appearanceReference) trial.appearanceReference = trial.mergeSurface;
+        }
+    }
+
+    static float Extent(Vector3 extents, Vector3 axis) =>
+        Mathf.Abs(axis.x) * extents.x + Mathf.Abs(axis.y) * extents.y + Mathf.Abs(axis.z) * extents.z;
 
     void OnDestroy()
     {

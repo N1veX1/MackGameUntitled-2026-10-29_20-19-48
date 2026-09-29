@@ -4917,14 +4917,14 @@ MonoBehaviour:
   trials:
   - direction: 0
     obstacle: {fileID: 867462678}
-    mergeSurface: {fileID: 0}
-    appearanceReference: {fileID: 0}
+    mergeSurface: {fileID: 696690877}
+    appearanceReference: {fileID: 696690877}
     travelDirection: {x: 0, y: 0, z: 1}
     approachPoint: {fileID: 2054461979}
   - direction: 1
     obstacle: {fileID: 586910733}
-    mergeSurface: {fileID: 0}
-    appearanceReference: {fileID: 0}
+    mergeSurface: {fileID: 6490166}
+    appearanceReference: {fileID: 6490166}
     travelDirection: {x: 0, y: 0, z: 1}
     approachPoint: {fileID: 469477225}
   - direction: 2
@@ -4941,8 +4941,8 @@ MonoBehaviour:
     approachPoint: {fileID: 539506910}
   - direction: 5
     obstacle: {fileID: 367498669}
-    mergeSurface: {fileID: 0}
-    appearanceReference: {fileID: 0}
+    mergeSurface: {fileID: 1817106346}
+    appearanceReference: {fileID: 1817106346}
     travelDirection: {x: -1, y: 0, z: 0}
     approachPoint: {fileID: 1818315430}
   startingPoint: {fileID: 52498669}
