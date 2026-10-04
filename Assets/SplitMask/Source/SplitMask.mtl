@@ -1,0 +1,8 @@
+newmtl black
+Kd 0.022 0.023 0.027
+Ks 0.12 0.12 0.12
+Ns 55
+newmtl ivory
+Kd 0.94 0.93 0.90
+Ks 0.12 0.12 0.12
+Ns 50
