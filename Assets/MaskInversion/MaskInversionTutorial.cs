@@ -15,6 +15,7 @@ public sealed class MaskInversionTutorial : MonoBehaviour
     float deathNoticeUntil;
     string deathNotice;
     public int PassedWalls => passedWalls;
+    public bool OwnsGate(MaskInversionGate gate) => System.Array.IndexOf(sequence, gate) >= 0;
     bool complete;
     GUIStyle heading, body, hint;
     static readonly string[] Names = { "СТЕНА 1 · МАСКА НАДЕТА", "МОСТ 1 · МАСКА СНЯТА", "СТЕНА 2 · МАСКА СНЯТА", "МОСТ 2 · МАСКА НАДЕТА" };

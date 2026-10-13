@@ -5,6 +5,8 @@ using UnityEngine.InputSystem;
 public sealed class MaskDemoPlayer : MonoBehaviour
 {
     [SerializeField, Min(.1f)] float moveSpeed = 4f;
+    [SerializeField, Min(1)] float acceleration = 28f;
+    Vector3 horizontalVelocity;
     [SerializeField] Camera movementCamera;
     [SerializeField] float gravity = -20f;
     [SerializeField] float eyeHeight = 1.7f;
@@ -44,7 +46,7 @@ public sealed class MaskDemoPlayer : MonoBehaviour
         verticalSpeed = -2f;
         Respawned?.Invoke();
     }
-    public void ResetMotion() { verticalSpeed = 0; }
+    public void ResetMotion() { verticalSpeed = 0; horizontalVelocity = Vector3.zero; }
     void Awake()
     {
         controller = GetComponent<CharacterController>();
@@ -114,12 +116,15 @@ public sealed class MaskDemoPlayer : MonoBehaviour
     {
         if(transform.position.y < fallRespawnHeight) { Respawn(); return; }
         if(!controller.enabled) return;
+        if (!viewEffects && mask) viewEffects = mask.GetComponent<MaskViewEffects>();
+        if (viewEffects && viewEffects.Busy) { horizontalVelocity = Vector3.zero; return; }
         var k=Keyboard.current;
         Vector3 input=Vector3.zero;
         if(k!=null) input=new Vector3((k.dKey.isPressed?1:0)-(k.aKey.isPressed?1:0),0,(k.wKey.isPressed?1:0)-(k.sKey.isPressed?1:0));
         if(controller.isGrounded && verticalSpeed<0) verticalSpeed=-2;
         verticalSpeed+=gravity*Time.deltaTime;
-        Vector3 displacement = (MovementDirection(input)*moveSpeed+Vector3.up*verticalSpeed)*Time.deltaTime;
+        horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, MovementDirection(input) * moveSpeed, acceleration * Time.deltaTime);
+        Vector3 displacement = (horizontalVelocity+Vector3.up*verticalSpeed)*Time.deltaTime;
         MaskProximityWall.PreparePlayerMovement(transform, displacement);
         controller.Move(displacement);
     }

@@ -1177,9 +1177,9 @@ MonoBehaviour:
   gravity: -22
   fallRespawnY: -2
   wornMaskLocalPosition: {x: 0, y: -0.016, z: 0.055}
-  closeSeconds: 0.22
-  closedSeconds: 0.15
-  openSeconds: 0.32
+  closeSeconds: 0.42
+  closedSeconds: 0.12
+  openSeconds: 0.3
   edgeEffectStrength: 0.55
 --- !u!4 &503929479
 Transform:
@@ -4202,3 +4202,4 @@ SceneRoots:
   - {fileID: 1410371246}
   - {fileID: 594465957}
   - {fileID: 902103001}
+

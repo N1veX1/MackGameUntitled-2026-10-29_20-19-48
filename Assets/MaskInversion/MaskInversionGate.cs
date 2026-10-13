@@ -4,7 +4,12 @@ public sealed class MaskInversionGate : MonoBehaviour
 {
     public enum GateKind { Wall, Bridge }
     [SerializeField] GateKind kind;
+    [Tooltip("For walls: opens with mask on. For bridges: exists with mask on.")]
     [SerializeField] bool existsWithMaskOn;
+    [Header("Standalone prefab — automatically finds the player in this scene")]
+    [SerializeField] MaskInversionPlayer player;
+    [SerializeField, Range(0, .15f)] float wallContactMargin = .06f;
+    bool subscribed;
     Renderer[] renderers;
     Collider[] colliders;
     public GateKind Kind => kind;
@@ -13,6 +18,34 @@ public sealed class MaskInversionGate : MonoBehaviour
     public Collider MainCollider => colliders != null && colliders.Length > 0 ? colliders[0] : null;
 
     public bool BlocksWithMask(bool maskOn) => kind == GateKind.Wall && maskOn != existsWithMaskOn;
+
+    void OnEnable() { if (Application.isPlaying) Bind(); }
+    void Start() { Bind(); }
+    void Bind()
+    {
+        if (subscribed) return;
+        // Tutorial-owned gates keep their existing ordered checkpoints and death handling.
+        foreach (var tutorial in FindObjectsByType<MaskInversionTutorial>(FindObjectsSortMode.None))
+            if (tutorial.gameObject.scene == gameObject.scene && tutorial.OwnsGate(this)) return;
+        if (!player)
+            foreach (var candidate in FindObjectsByType<MaskInversionPlayer>(FindObjectsSortMode.None))
+                if (candidate.gameObject.scene == gameObject.scene) { player = candidate; break; }
+        if (!player) return;
+        player.MaskStateChanged += OnMaskChanged; subscribed = true; Apply(player.MaskOn);
+    }
+    void OnMaskChanged(bool maskOn)
+    {
+        Physics.SyncTransforms();
+        bool crushed = !IsBlocking && BlocksWithMask(maskOn) && !player.IsRespawning
+            && TouchesPlayer(player.Controller, wallContactMargin);
+        Apply(maskOn);
+        if (crushed) player.Respawn();
+    }
+    void OnDisable()
+    {
+        if (subscribed && player) player.MaskStateChanged -= OnMaskChanged;
+        subscribed = false;
+    }
 
     public bool TouchesPlayer(CharacterController player, float contactMargin)
     {

@@ -1,0 +1,17 @@
+{
+  "height_m": 0.26,
+  "shell_thickness_m": 0.004,
+  "eye_contour_width_m": 0.002,
+  "parts": {
+    "Curved black shell with open eyes": {
+      "vertices": 14158,
+      "triangles": 25158,
+      "triangles_blocking_eyes": 0
+    },
+    "Ivory artwork and sharp eye contours": {
+      "vertices": 17168,
+      "triangles": 21240,
+      "triangles_blocking_eyes": 0
+    }
+  }
+}

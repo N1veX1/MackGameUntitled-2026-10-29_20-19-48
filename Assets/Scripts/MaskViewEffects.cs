@@ -7,11 +7,13 @@ using UnityEngine.InputSystem;
 [DefaultExecutionOrder(1000)]
 public sealed class MaskViewEffects : MonoBehaviour
 {
-    [Min(.05f)] public float closeSeconds = .22f;
-    [Min(.05f)] public float closedSeconds = .15f;
-    [Min(.05f)] public float openSeconds = .32f;
+    [Min(.05f)] public float closeSeconds = .42f;
+    [Min(.05f)] public float closedSeconds = .12f;
+    [Min(.05f)] public float openSeconds = .3f;
     [Min(.05f)] public float viewTransitionSeconds = .65f;
     public float mouseSensitivity = .15f;
+    [Min(.01f)] public float lookSmoothSeconds = .045f;
+    Vector2 smoothedLook;
     [HideInInspector] public float orbitLimit = 65f; // Retained for existing serialized components.
 
     public bool Busy { get; private set; }
@@ -21,7 +23,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     // Restore every obstacle before the first moving-camera frame, including UI input.
     public event Action ViewTransitionStarted;
     // Kept separately from the projection camera, including during the equip blink.
-    public Quaternion FirstPersonLookRotation => Quaternion.Euler(lookAngles.x, lookAngles.y, 0);
+    public Quaternion FirstPersonLookRotation => Quaternion.Euler(smoothedLook.x, smoothedLook.y, 0);
 
     struct RotationSegment
     {
@@ -41,6 +43,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     Vector2 currentAngles, targetAngles;
     Vector2 lookAngles;
     bool dragging;
+    MaskEquipAnimation maskAnimation;
     CursorLockMode previousLock;
     bool previousVisible;
 
@@ -53,6 +56,38 @@ public sealed class MaskViewEffects : MonoBehaviour
     public void Blink(Action change)
     {
         if (!Busy) StartCoroutine(BlinkRoutine(change));
+    }
+
+    public void AnimateMaskChange(GameObject originalMask, bool equip, Action change)
+    {
+        if (Busy) return;
+        maskAnimation = MaskEquipAnimation.Attach(view, originalMask);
+        StartCoroutine(MaskChangeRoutine(equip, change));
+    }
+    IEnumerator MaskChangeRoutine(bool equip, Action change)
+    {
+        Busy = true;
+        if (equip && maskAnimation) maskAnimation.Begin(true);
+        yield return AnimateMaskLids(0, 1, Mathf.Max(.42f, closeSeconds), equip);
+        if (maskAnimation) maskAnimation.End();
+        change?.Invoke();
+        yield return new WaitForSecondsRealtime(closedSeconds);
+        // Removal is shown after returning from the projection to first person.
+        if (!equip && maskAnimation) maskAnimation.Begin(false);
+        yield return AnimateMaskLids(1, 0, Mathf.Max(.3f, openSeconds), !equip);
+        if (maskAnimation) maskAnimation.End();
+        Busy = false;
+    }
+    IEnumerator AnimateMaskLids(float from, float to, float duration, bool animate)
+    {
+        for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
+        {
+            float progress = Mathf.Clamp01(t / duration);
+            eyelid = Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, progress));
+            if (animate && maskAnimation) maskAnimation.SetProgress(progress);
+            yield return null;
+        }
+        eyelid = to;
     }
 
     IEnumerator BlinkRoutine(Action change)
@@ -189,6 +224,7 @@ public sealed class MaskViewEffects : MonoBehaviour
         if (!view) return;
         lookAngles = UprightAngles(view.transform.rotation);
         lookAngles.x = Mathf.Clamp(lookAngles.x, -85, 85);
+        smoothedLook = lookAngles;
     }
 
     void LateUpdate()
@@ -220,7 +256,9 @@ public sealed class MaskViewEffects : MonoBehaviour
         else
         {
             // World yaw/pitch also removes any inherited camera-parent roll.
-            view.transform.rotation = Quaternion.Euler(lookAngles.x, lookAngles.y, 0);
+            float follow = 1 - Mathf.Exp(-Time.unscaledDeltaTime / lookSmoothSeconds);
+            if (!Busy) { smoothedLook.x = Mathf.Lerp(smoothedLook.x, lookAngles.x, follow); smoothedLook.y = Mathf.LerpAngle(smoothedLook.y, lookAngles.y, follow); }
+            view.transform.rotation = Quaternion.Euler(smoothedLook.x, smoothedLook.y, 0);
         }
     }
 
@@ -253,6 +291,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     public void CancelTransition()
     {
         StopAllCoroutines();
+        if (maskAnimation) maskAnimation.End();
         eyelid = 0;
         Busy = false;
         if (masked) FinishTransition();

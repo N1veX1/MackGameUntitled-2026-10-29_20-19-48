@@ -130,7 +130,7 @@ public sealed class MaskAxisCamera : MonoBehaviour
     {
         if (Application.isPlaying && isActiveAndEnabled)
         {
-            if (!effects.Busy && MaskEnabled != on) effects.Blink(() => ApplyMaskEnabled(on));
+            if (!effects.Busy && MaskEnabled != on) effects.AnimateMaskChange(maskVisual, on, () => ApplyMaskEnabled(on));
             return;
         }
         ApplyMaskEnabled(on);
