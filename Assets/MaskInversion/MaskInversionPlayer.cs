@@ -19,8 +19,8 @@ public sealed class MaskInversionPlayer : MonoBehaviour
     [SerializeField] float fallRespawnY = -2f;
     [Header("Head attachment")]
     [SerializeField] Vector3 wornMaskLocalPosition = new Vector3(0f, -.016f, .055f);
-    [Header("Eyelids — same timing as Tutorial 1")]
-    [SerializeField, Min(.05f)] float closeSeconds = .42f;
+    [Header("Respawn fade only")]
+    [SerializeField, HideInInspector] float closeSeconds = .42f;
     [SerializeField, Min(.05f)] float closedSeconds = .12f;
     [SerializeField, Min(.05f)] float openSeconds = .3f;
     [Header("Mask screen effect")]
@@ -35,7 +35,7 @@ public sealed class MaskInversionPlayer : MonoBehaviour
     bool cursorCaptured;
     int transitionVersion;
     Texture2D edgeTexture;
-    MaskEquipAnimation maskAnimation;
+
     public bool MaskOn { get; private set; }
     public bool Transitioning { get; private set; }
     public bool IsRespawning { get; private set; }
@@ -61,7 +61,7 @@ public sealed class MaskInversionPlayer : MonoBehaviour
         }
         if (wornMaskVisual) wornMaskVisual.SetActive(false);
         InitializeWornVisuals();
-        maskAnimation = MaskEquipAnimation.Attach(playerCamera, wornMaskVisual);
+
         checkpoint = transform.position;
         checkpointRotation = transform.rotation;
         targetYaw = smoothYaw = transform.eulerAngles.y;
@@ -79,7 +79,7 @@ public sealed class MaskInversionPlayer : MonoBehaviour
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !cursorCaptured)
             CaptureCursor(true);
         if (cursorCaptured && keyboard.mKey.wasPressedThisFrame) ToggleMask();
-        // Freeze movement, gravity and look until the eyes have fully reopened.
+        // Freeze only during respawn. Mask changes complete within the same frame.
         if (Transitioning) { horizontalVelocity = Vector3.zero; return; }
         if (cursorCaptured && Mouse.current != null)
         {
@@ -103,41 +103,17 @@ public sealed class MaskInversionPlayer : MonoBehaviour
 
     public void ToggleMask()
     {
-        if (!Transitioning && isActiveAndEnabled) StartCoroutine(ToggleMaskRoutine());
-    }
-
-    IEnumerator ToggleMaskRoutine()
-    {
+        if (Transitioning || !isActiveAndEnabled) return;
         int version = ++transitionVersion;
-        Transitioning = true;
-        bool puttingOn = !MaskOn;
-        if (puttingOn && maskAnimation) maskAnimation.Begin(true);
-        yield return AnimateMaskLids(0f, 1f, Mathf.Max(.42f, closeSeconds), puttingOn);
-        if (maskAnimation) maskAnimation.End();
-        MaskOn = puttingOn;
+        Transitioning = true; // Guard reentrant state events, not an animation delay.
+        MaskOn = !MaskOn;
         UpdateWornVisuals();
         MaskStateChanged?.Invoke(MaskOn);
-        if (version != transitionVersion) yield break;
-        maskPulse = MaskOn ? 1f : 0f;
-        yield return new WaitForSecondsRealtime(closedSeconds);
-        if (!puttingOn && maskAnimation) maskAnimation.Begin(false);
-        yield return AnimateMaskLids(1f, 0f, Mathf.Max(.3f, openSeconds), !puttingOn);
-        if (maskAnimation) maskAnimation.End();
+        // A returning wall may start a respawn synchronously during the event.
+        if (version != transitionVersion) return;
+        maskPulse = 0;
         Transitioning = false;
     }
-
-    IEnumerator AnimateMaskLids(float from, float to, float duration, bool animate)
-    {
-        for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
-        {
-            float progress = Mathf.Clamp01(t / duration);
-            eyelid = Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, progress));
-            if (animate && maskAnimation) maskAnimation.SetProgress(progress);
-            yield return null;
-        }
-        eyelid = to;
-    }
-
     IEnumerator AnimateLids(float from, float to, float duration)
     {
         for (float t = 0f; t < duration; t += Time.unscaledDeltaTime)
@@ -205,7 +181,7 @@ public sealed class MaskInversionPlayer : MonoBehaviour
         if (IsRespawning || !isActiveAndEnabled) return;
         ++transitionVersion;
         StopAllCoroutines();
-        if (maskAnimation) maskAnimation.End();
+
         IsRespawning = true;
         Transitioning = true;
         if (wornMaskVisual) wornMaskVisual.SetActive(false);
@@ -289,7 +265,7 @@ public sealed class MaskInversionPlayer : MonoBehaviour
     void OnDisable()
     {
         StopAllCoroutines();
-        if (maskAnimation) maskAnimation.End();
+
         eyelid = 0f;
         Transitioning = IsRespawning = false;
         if (wornMaskVisual) wornMaskVisual.SetActive(false);

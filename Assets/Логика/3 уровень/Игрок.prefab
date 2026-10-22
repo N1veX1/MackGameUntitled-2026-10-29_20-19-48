@@ -9,13 +9,13 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3071584802918205617}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: "Ornament mask \u2014 original supplied prefab"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &3071584802918205617
 Transform:
   m_ObjectHideFlags: 0
@@ -25,7 +25,7 @@ Transform:
   m_GameObject: {fileID: 601777972548680924}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.052, y: -0.02, z: -0.015}
+  m_LocalPosition: {x: 0, y: -0.02, z: 0.09}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -44,7 +44,7 @@ GameObject:
   - component: {fileID: 5110100744898830475}
   - component: {fileID: 1725384299005245373}
   - component: {fileID: 8109747656991017252}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Ivory artwork and sharp eye contours
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -321,7 +321,7 @@ GameObject:
   - component: {fileID: 3152027978092342648}
   - component: {fileID: 7307812696574058356}
   - component: {fileID: 72285702948995203}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Curved black shell with open eyes
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -476,7 +476,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967291
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -510,7 +510,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrnamentMaskView
   cosmicOverlay: {fileID: 7798947870913482243}
   interiorLight: {fileID: 6037670244198035033}
-  wornPosition: {x: -0.052, y: -0.02, z: -0.015}
+  wornPosition: {x: 0, y: -0.02, z: 0.09}
   cosmicIntensity: 0.25
 --- !u!1 &9200931379186680395
 GameObject:
@@ -622,6 +622,8 @@ MonoBehaviour:
   playerCamera: {fileID: 5053458973414706113}
   ornamentMask: {fileID: 601777972548680924}
   mouseSensitivity: 0.11
+  lookSmoothSeconds: 0.045
+  inputAcceleration: 9
   eyesCloseSeconds: 0.42
   eyesHoldSeconds: 0.12
   eyesOpenSeconds: 0.3

@@ -1,4 +1,4 @@
-using System.Collections;
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -16,7 +16,8 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     [SerializeField, Min(.01f)] float eyeHeight = .78f;
     [SerializeField] float gravityStrength = 18;
     [SerializeField] float fallResetDistance = 14;
-    [SerializeField, Range(25, 120)] float maxTurnDegreesPerSecond = 60;
+    // Legacy value now calibrates the visual pulse only; it never limits walking speed.
+    [SerializeField, HideInInspector] float maxTurnDegreesPerSecond = 60;
     [SerializeField, Min(0)] float stopBeforeMaskSeconds = .18f;
     [Header("Camera and original ornament mask")]
     [SerializeField] Camera playerCamera;
@@ -24,23 +25,25 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     [SerializeField] float mouseSensitivity = .11f;
     [SerializeField, Min(.01f)] float lookSmoothSeconds = .045f;
     [SerializeField, Min(1)] float inputAcceleration = 9f;
-    [Header("Closed eyes during mask changes")]
-    [SerializeField] float eyesCloseSeconds = .42f, eyesHoldSeconds = .12f, eyesOpenSeconds = .3f;
+    // Legacy serialized timings, unused: mask toggles are instantaneous.
+    [SerializeField, HideInInspector] float eyesCloseSeconds = .42f, eyesHoldSeconds = .12f, eyesOpenSeconds = .3f;
 
     Transform[] nodes;
     float[] lengths;
     Rigidbody body;
     OrnamentMaskView maskView;
-    Vector2 movementRequested, freeMove;
+    Vector2 movementRequested;
+    Vector3 freeMoveWorld;
     Vector2 smoothedInput;
     float smoothYaw, smoothPitch;
     float lastMotionTime = -100, lastGroundTime = -100, turnIntensity;
     string notice;
     float noticeUntil;
-    float routeDistance, sideDistance, checkpoint, yaw, pitch, eyelid;
+    float routeDistance, sideDistance, checkpoint, yaw, pitch;
     bool maskOn, transitioning, cursorLocked, attached = true, complete, blocked;
     Vector3 gravityUp = Vector3.up, fallOrigin;
     Quaternion surfaceFrame = Quaternion.identity;
+    Vector3 movementForward = Vector3.forward;
     string currentAxis = "Y";
     public float RouteDistance => routeDistance;
     public float RouteLength => lengths == null ? 0 : lengths[lengths.Length - 1];
@@ -52,6 +55,8 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     public float TurnIntensity => turnIntensity;
     public bool IsAttached => attached;
     public bool OnRoundedTransition => InCorner(routeDistance);
+    // The new floor sets the reference vertical; only mouse input sets head yaw and pitch.
+    public Quaternion ViewRotation => surfaceFrame * Quaternion.Euler(smoothPitch, smoothYaw, 0);
     public bool IsStationary => movementRequested.sqrMagnitude < .001f && Time.unscaledTime - lastMotionTime >= stopBeforeMaskSeconds
         && (attached || (body && Vector3.ProjectOnPlane(body.linearVelocity, gravityUp).sqrMagnitude < .01f));
 
@@ -80,14 +85,16 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
         routeDistance = checkpoint; sideDistance = 0; attached = true;
         transform.position = Sample(routeDistance, out surfaceFrame);
         transform.rotation = surfaceFrame; gravityUp = surfaceFrame * Vector3.up;
+        movementForward = surfaceFrame * Vector3.forward;
         if (playerCamera) { playerCamera.transform.localPosition = Vector3.up * eyeHeight; playerCamera.transform.localRotation = Quaternion.identity; }
         if (ornamentMask && playerCamera)
         {
             maskView = playerCamera.GetComponent<OrnamentMaskView>();
             if (maskView) maskView.Configure(playerCamera, ornamentMask, this);
         }
-        lastMotionTime = -100; movementRequested = freeMove = Vector2.zero; complete = blocked = false;
+        lastMotionTime = -100; movementRequested = Vector2.zero; freeMoveWorld = Vector3.zero; complete = blocked = false;
         yaw = pitch = smoothYaw = smoothPitch = 0; smoothedInput = Vector2.zero;
+        ApplyCameraRotation();
         SetMaskState(false);
         if (Application.isPlaying) LockCursor(true);
     }
@@ -110,49 +117,119 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
         }
         float follow = 1 - Mathf.Exp(-Time.unscaledDeltaTime / lookSmoothSeconds);
         smoothYaw = Mathf.LerpAngle(smoothYaw, yaw, follow); smoothPitch = Mathf.Lerp(smoothPitch, pitch, follow);
-        if (playerCamera) playerCamera.transform.localRotation = Quaternion.Euler(smoothPitch, smoothYaw, 0);
+        ApplyCameraRotation();
         smoothedInput = Vector2.MoveTowards(smoothedInput, Vector2.ClampMagnitude(movementRequested, 1), inputAcceleration * Time.deltaTime);
-        Vector2 input = smoothedInput;
-        float angle = smoothYaw * Mathf.Deg2Rad;
-        MoveOnPlatform(new Vector2(input.x * Mathf.Cos(angle) + input.y * Mathf.Sin(angle),
-            input.y * Mathf.Cos(angle) - input.x * Mathf.Sin(angle)), Time.deltaTime);
+        MoveRelativeToView(smoothedInput, Time.deltaTime);
         if (attached && !InCorner(routeDistance)) checkpoint = routeDistance;
     }
-    // Input x = across the platform, y = along it, after projection from the camera.
-    public void MoveOnPlatform(Vector2 input, float deltaTime)
+    // Follow the current floor's orientation without adding any head tilt or route steering.
+    void LateUpdate() => ApplyCameraRotation();
+    void ApplyCameraRotation() { if (playerCamera) playerCamera.transform.rotation = ViewRotation; }
+
+    // Camera-local input. Gravity sets the floor; the mouse sets the direction of the head.
+    public void MoveRelativeToView(Vector2 input, float deltaTime) => Move(input, deltaTime, true);
+
+    // Route-local input retained for authored movement and validation tools.
+    public void MoveOnPlatform(Vector2 input, float deltaTime) => Move(input, deltaTime, false);
+
+    void Move(Vector2 input, float deltaTime, bool relativeToView)
     {
-        freeMove = input;
-        if (!attached || transitioning || lengths == null) return;
+        if (transitioning || lengths == null || lengths.Length < 2) return;
+        input = Vector2.ClampMagnitude(input, 1);
+        Sample(routeDistance, out Quaternion routeFrame);
+        freeMoveWorld = InputDirection(input, relativeToView, routeFrame);
+        if (!attached) return;
         Vector3 previousPosition = transform.position, previousUp = gravityUp;
-        float desired = Mathf.Clamp(routeDistance + input.y * moveSpeed * deltaTime, 0, RouteLength);
-        if (maskOn) desired = LimitTurnSpeed(routeDistance, desired, deltaTime);
-        float allowed = maskOn ? desired : ClampToCurrentGravity(routeDistance, desired);
-        blocked = Mathf.Abs(allowed - desired) > .0001f;
-        routeDistance = allowed;
-        // The floor fills the room. Its side walls are solid boundaries, not lethal ledges.
-        sideDistance = Mathf.Clamp(sideDistance + input.x * moveSpeed * deltaTime, -platformHalfWidth + .3f, platformHalfWidth - .3f);
-        Vector3 center = Sample(routeDistance, out Quaternion frame);
-        if (maskOn || Vector3.Angle(gravityUp, frame * Vector3.up) < .1f) surfaceFrame = frame;
-        if (maskOn) gravityUp = frame * Vector3.up;
-        transform.SetPositionAndRotation(center + (frame * Vector3.right) * sideDistance, surfaceFrame);
+        float travel = moveSpeed * Mathf.Max(0, deltaTime);
+        int steps = Mathf.Max(1, Mathf.CeilToInt(travel * input.magnitude / .035f));
+        float step = travel / steps;
+        blocked = false;
+        for (int i = 0; i < steps; i++)
+        {
+            Sample(routeDistance, out routeFrame);
+            Vector3 direction = InputDirection(input, relativeToView, routeFrame);
+            float across = Vector3.Dot(direction, routeFrame * Vector3.right);
+            float along = Vector3.Dot(direction, routeFrame * Vector3.forward);
+            // At the inside/outside of a flat bend, a metre of route is not a metre of walking.
+            // Convert using the actual offset path so lateral position cannot alter speed.
+            float desired = AdvanceAlongRoute(routeDistance, sideDistance, along * step);
+            float allowed = maskOn ? desired : ClampToCurrentGravity(routeDistance, desired);
+            blocked |= Mathf.Abs(allowed - desired) > .0001f;
+            routeDistance = allowed;
+            sideDistance = Mathf.Clamp(sideDistance + across * step, -platformHalfWidth + .3f, platformHalfWidth - .3f);
+            Vector3 center = Sample(routeDistance, out Quaternion frame);
+            if (maskOn)
+            {
+                Vector3 nextUp = frame * Vector3.up;
+                // Reorient to the new floor, preserving all mouse yaw/pitch values unchanged.
+                // A flat route bend has no gravityTurn, so it cannot steer the camera.
+                Quaternion gravityTurn = Quaternion.FromToRotation(gravityUp, nextUp);
+                surfaceFrame = gravityTurn * surfaceFrame;
+                movementForward = gravityTurn * movementForward;
+                gravityUp = nextUp;
+            }
+            transform.SetPositionAndRotation(center + (frame * Vector3.right) * sideDistance, surfaceFrame);
+            freeMoveWorld = InputDirection(input, relativeToView, frame);
+            if (blocked && Mathf.Abs(across) < .0001f) break;
+            if ((routeDistance <= 0 || routeDistance >= RouteLength) && Mathf.Abs(across) < .0001f) break;
+        }
         currentAxis = AxisName(gravityUp); complete = routeDistance >= RouteLength - 1.2f;
+        ApplyCameraRotation();
         if ((transform.position - previousPosition).sqrMagnitude > .000001f) lastMotionTime = Time.unscaledTime;
         turnIntensity = Mathf.Clamp01(Vector3.Angle(previousUp, gravityUp) / Mathf.Max(.001f, deltaTime * maxTurnDegreesPerSecond));
     }
-    float LimitTurnSpeed(float from, float to, float dt)
+
+    Vector3 InputDirection(Vector2 input, bool relativeToView, Quaternion routeFrame)
     {
-        // Subdivide long steps: a complete pair of bends may finish with the same up vector.
-        float allowed = from, angleBudget = maxTurnDegreesPerSecond * Mathf.Max(0, dt);
-        int steps = Mathf.Max(1, Mathf.CeilToInt(Mathf.Abs(to - from) / .025f));
-        Sample(from, out Quaternion previous);
-        for (int i = 1; i <= steps; i++)
+        if (!relativeToView) return routeFrame * new Vector3(input.x, 0, input.y);
+        Vector3 forward = Vector3.ProjectOnPlane(ViewRotation * Vector3.forward, gravityUp);
+        // Near a view straight into the floor, retain a stable tangent instead of normalizing noise.
+        if (forward.sqrMagnitude > .0025f) movementForward = forward.normalized;
+        else
         {
-            float next = Mathf.Lerp(from, to, i / (float)steps); Sample(next, out Quaternion frame);
-            float angle = Quaternion.Angle(previous, frame);
-            if (angle > angleBudget) return Mathf.Lerp(allowed, next, angleBudget / Mathf.Max(.0001f, angle));
-            angleBudget -= angle; allowed = next; previous = frame;
+            forward = Vector3.ProjectOnPlane(movementForward, gravityUp);
+            if (forward.sqrMagnitude < .0001f)
+            {
+                Vector3 viewRight = Vector3.ProjectOnPlane(ViewRotation * Vector3.right, gravityUp);
+                forward = Vector3.Cross(viewRight, gravityUp);
+            }
+            if (forward.sqrMagnitude < .0001f) forward = surfaceFrame * Vector3.forward;
+            movementForward = forward.normalized;
         }
-        return to;
+        Vector3 right = Vector3.Cross(gravityUp, movementForward).normalized;
+        return right * input.x + movementForward * input.y;
+    }
+
+    Vector3 OffsetPoint(float distance, float side)
+    {
+        Vector3 center = Sample(distance, out Quaternion frame);
+        return center + (frame * Vector3.right) * side;
+    }
+
+    float RouteMetric(float distance, float side)
+    {
+        if (Mathf.Abs(side) < .0001f) return 1;
+        float before = Mathf.Max(0, distance - .02f), after = Mathf.Min(RouteLength, distance + .02f);
+        if (after - before < .00001f) return 1;
+        return Mathf.Max(.1f, Vector3.Distance(OffsetPoint(before, side), OffsetPoint(after, side)) / (after - before));
+    }
+
+    float AdvanceAlongRoute(float distance, float side, float metres)
+    {
+        if (Mathf.Abs(side) < .0001f || Mathf.Abs(metres) < .00001f)
+            return Mathf.Clamp(distance + metres, 0, RouteLength);
+        Vector3 origin = OffsetPoint(distance, side);
+        float direction = Mathf.Sign(metres), target = Mathf.Abs(metres);
+        float low = direction > 0 ? distance : 0, high = direction > 0 ? RouteLength : distance;
+        float result = Mathf.Clamp(distance + metres / RouteMetric(distance, side), low, high);
+        // Correct steps crossing a straight/curve seam, where the offset metric changes abruptly.
+        for (int i = 0; i < 6; i++)
+        {
+            float error = target - Vector3.Distance(origin, OffsetPoint(result, side));
+            if (Mathf.Abs(error) < .00001f) break;
+            result = Mathf.Clamp(result + direction * error / RouteMetric(result, side), low, high);
+        }
+        return result;
     }
     float ClampToCurrentGravity(float from, float to)
     {
@@ -186,8 +263,16 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     }
     Vector3 Sample(float distance, out Quaternion rotation)
     {
-        int i = 0;
-        while (i < lengths.Length - 2 && lengths[i + 1] < distance) i++;
+        // Find the first segment end at/after the requested distance. Keep exact
+        // boundary behaviour while avoiding a scan from the start on every substep.
+        int low = 1, high = lengths.Length - 1;
+        while (low < high)
+        {
+            int middle = low + (high - low) / 2;
+            if (lengths[middle] < distance) low = middle + 1;
+            else high = middle;
+        }
+        int i = low - 1;
         float t = Mathf.InverseLerp(lengths[i], lengths[i + 1], distance);
         rotation = Quaternion.Slerp(nodes[i].rotation, nodes[i + 1].rotation, t);
         return Vector3.Lerp(nodes[i].position, nodes[i + 1].position, t);
@@ -206,7 +291,7 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
         if (transitioning) return false;
         if (maskOn && InCorner(routeDistance)) { Notify("СНАЧАЛА ЗАКОНЧИ ПЕРЕХОД НА ДРУГОЙ ПОЛ"); return false; }
         if (!IsStationary || (!attached && Time.time - lastGroundTime > .15f)) { Notify("ОСТАНОВИСЬ, ЧТОБЫ СМЕНИТЬ МАСКУ"); return false; }
-        StartCoroutine(SwitchMask()); return true;
+        return SetMaskState(!maskOn);
     }
     void Notify(string message) { notice = message; noticeUntil = Time.unscaledTime + 2; }
     public void ReleaseToPhysics()
@@ -217,7 +302,7 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     void FixedUpdate()
     {
         if (attached || !body) return;
-        Vector3 lateral = surfaceFrame * new Vector3(freeMove.x, 0, freeMove.y);
+        Vector3 lateral = Vector3.ProjectOnPlane(freeMoveWorld, gravityUp);
         Vector3 planar = transitioning ? Vector3.zero : lateral * moveSpeed;
         body.linearVelocity = planar + Vector3.Project(body.linearVelocity, gravityUp);
         body.AddForce(GravityDirection * gravityStrength, ForceMode.Acceleration);
@@ -254,41 +339,17 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
         routeDistance = bestDistance; sideDistance = Mathf.Clamp(bestSide, -platformHalfWidth + .3f, platformHalfWidth - .3f);
         Vector3 center = Sample(routeDistance, out Quaternion landedFrame);
         transform.SetPositionAndRotation(center + landedFrame * Vector3.right * sideDistance, surfaceFrame);
+        ApplyCameraRotation();
         return true;
     }
     public void Respawn()
     {
         body.isKinematic = true; attached = true; routeDistance = checkpoint; sideDistance = 0;
         transform.position = Sample(routeDistance, out surfaceFrame); transform.rotation = surfaceFrame;
-        gravityUp = surfaceFrame * Vector3.up; yaw = pitch = smoothYaw = smoothPitch = 0; smoothedInput = Vector2.zero; complete = blocked = false;
+        gravityUp = surfaceFrame * Vector3.up; movementForward = surfaceFrame * Vector3.forward;
+        smoothedInput = Vector2.zero; complete = blocked = false;
+        ApplyCameraRotation();
         currentAxis = AxisName(gravityUp);
-    }
-    IEnumerator SwitchMask()
-    {
-        transitioning = true; freeMove = Vector2.zero; bool equip = !maskOn;
-        for (float t = 0; t < eyesCloseSeconds; t += Time.unscaledDeltaTime)
-        {
-            float progress = Mathf.SmoothStep(0, 1, t / eyesCloseSeconds);
-            eyelid = progress;
-            if (equip && maskView) maskView.AnimateDonning(t / eyesCloseSeconds, true);
-            yield return null;
-        }
-        eyelid = 1;
-        SetMaskState(equip); yield return new WaitForSecondsRealtime(eyesHoldSeconds);
-        for (float t = 0; t < eyesOpenSeconds; t += Time.unscaledDeltaTime)
-        {
-            float progress = Mathf.Clamp01(t / eyesOpenSeconds);
-            eyelid = 1 - Mathf.SmoothStep(0, 1, progress);
-            if (!equip && maskView) maskView.AnimateDonning(progress, false);
-            yield return null;
-        }
-        eyelid = 0; if (maskView) maskView.ApplyState(maskOn); transitioning = false;
-    }
-    IEnumerator Lids(float from, float to, float duration)
-    {
-        for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
-        { eyelid = Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, t / duration)); yield return null; }
-        eyelid = to;
     }
     static string AxisName(Vector3 up)
     {
@@ -309,12 +370,6 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
         GUI.Label(new Rect(38, 30, 420, 24), maskOn ? "МАСКА НАДЕТА · ПОВОРОТЫ ДОСТУПНЫ" : "МАСКА СНЯТА · ГРАВИТАЦИЯ СОХРАНЕНА");
         GUI.Label(new Rect(38, 56, 420, 24), "WASD — идти  ·  Мышь — обзор  ·  M — маска");
         GUI.Label(new Rect(38, 82, 420, 24), Time.unscaledTime < noticeUntil ? notice : blocked ? "НАДЕНЬ МАСКУ ДЛЯ СМЕНЫ ГРАВИТАЦИИ" : complete ? "ВЫХОД ДОСТИГНУТ · можно вернуться назад" : $"ВЕРТИКАЛЬ: {currentAxis}   /   {Mathf.RoundToInt(routeDistance)} м");
-        if (eyelid > 0)
-        {
-            GUI.color = Color.black; float h = Screen.height * .5f * eyelid + 1;
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, h), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(0, Screen.height - h, Screen.width, h), Texture2D.whiteTexture);
-        }
         GUI.color = old;
     }
 }

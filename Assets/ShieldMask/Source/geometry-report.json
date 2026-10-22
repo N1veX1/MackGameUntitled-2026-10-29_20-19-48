@@ -1,0 +1,18 @@
+{
+  "height_m": 0.26,
+  "shell_thickness_m": 0.004,
+  "eye_holes": 2,
+  "white_tabs_inside_eyes": false,
+  "parts": {
+    "Curved black shell with open eyes": {
+      "vertices": 12954,
+      "triangles": 22680,
+      "triangles_blocking_eyes": 0
+    },
+    "Ivory concentric shield bands": {
+      "vertices": 12228,
+      "triangles": 17064,
+      "triangles_blocking_eyes": 0
+    }
+  }
+}

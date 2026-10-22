@@ -1,15 +1,15 @@
-﻿using System;
-using System.Collections;
+using System;
+
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>Shared eyelids, upright first-person look and fixed-axis camera transitions.</summary>
+/// <summary>Upright first-person look and fixed-axis camera transitions.</summary>
 [DefaultExecutionOrder(1000)]
 public sealed class MaskViewEffects : MonoBehaviour
 {
-    [Min(.05f)] public float closeSeconds = .42f;
-    [Min(.05f)] public float closedSeconds = .12f;
-    [Min(.05f)] public float openSeconds = .3f;
+    [HideInInspector] public float closeSeconds = .42f;
+    [HideInInspector] public float closedSeconds = .12f;
+    [HideInInspector] public float openSeconds = .3f;
     [Min(.05f)] public float viewTransitionSeconds = .65f;
     public float mouseSensitivity = .15f;
     [Min(.01f)] public float lookSmoothSeconds = .045f;
@@ -22,7 +22,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     public Camera ViewCamera => view;
     // Restore every obstacle before the first moving-camera frame, including UI input.
     public event Action ViewTransitionStarted;
-    // Kept separately from the projection camera, including during the equip blink.
+    // Kept separately from the projection camera, including when toggling the mask.
     public Quaternion FirstPersonLookRotation => Quaternion.Euler(smoothedLook.x, smoothedLook.y, 0);
 
     struct RotationSegment
@@ -34,7 +34,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     readonly RotationSegment[] segments = new RotationSegment[3];
     Camera view;
     bool masked, transitioning;
-    float eyelid, distance, transitionElapsed, transitionDuration, totalAngle;
+    float distance, transitionElapsed, transitionDuration, totalAngle;
     int segmentCount;
     Vector3 center;
     Quaternion axisRotation = Quaternion.identity;
@@ -43,7 +43,7 @@ public sealed class MaskViewEffects : MonoBehaviour
     Vector2 currentAngles, targetAngles;
     Vector2 lookAngles;
     bool dragging;
-    MaskEquipAnimation maskAnimation;
+
     CursorLockMode previousLock;
     bool previousVisible;
 
@@ -53,64 +53,9 @@ public sealed class MaskViewEffects : MonoBehaviour
         ResetFirstPersonLook();
     }
 
-    public void Blink(Action change)
-    {
-        if (!Busy) StartCoroutine(BlinkRoutine(change));
-    }
-
-    public void AnimateMaskChange(GameObject originalMask, bool equip, Action change)
-    {
-        if (Busy) return;
-        maskAnimation = MaskEquipAnimation.Attach(view, originalMask);
-        StartCoroutine(MaskChangeRoutine(equip, change));
-    }
-    IEnumerator MaskChangeRoutine(bool equip, Action change)
-    {
-        Busy = true;
-        if (equip && maskAnimation) maskAnimation.Begin(true);
-        yield return AnimateMaskLids(0, 1, Mathf.Max(.42f, closeSeconds), equip);
-        if (maskAnimation) maskAnimation.End();
-        change?.Invoke();
-        yield return new WaitForSecondsRealtime(closedSeconds);
-        // Removal is shown after returning from the projection to first person.
-        if (!equip && maskAnimation) maskAnimation.Begin(false);
-        yield return AnimateMaskLids(1, 0, Mathf.Max(.3f, openSeconds), !equip);
-        if (maskAnimation) maskAnimation.End();
-        Busy = false;
-    }
-    IEnumerator AnimateMaskLids(float from, float to, float duration, bool animate)
-    {
-        for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
-        {
-            float progress = Mathf.Clamp01(t / duration);
-            eyelid = Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, progress));
-            if (animate && maskAnimation) maskAnimation.SetProgress(progress);
-            yield return null;
-        }
-        eyelid = to;
-    }
-
-    IEnumerator BlinkRoutine(Action change)
-    {
-        Busy = true;
-        yield return AnimateLids(0, 1, closeSeconds);
-        change?.Invoke();
-        yield return new WaitForSecondsRealtime(closedSeconds);
-        yield return AnimateLids(1, 0, openSeconds);
-        Busy = false;
-    }
-
-    IEnumerator AnimateLids(float from, float to, float duration)
-    {
-        duration = Mathf.Max(.01f, duration);
-        for (float t = 0; t < duration; t += Time.unscaledDeltaTime)
-        {
-            eyelid = Mathf.Lerp(from, to, Mathf.SmoothStep(0, 1, t / duration));
-            yield return null;
-        }
-        eyelid = to;
-    }
-
+    // Retain both entry points for existing scenes and the imported XYZ package.
+    public void Blink(Action change) => change?.Invoke();
+    public void AnimateMaskChange(GameObject originalMask, bool equip, Action change) => change?.Invoke();
     public void SetView(Vector3 focus, Vector3 side, Vector3 up, float radius)
     {
         if (side.sqrMagnitude < .001f) return;
@@ -120,7 +65,7 @@ public sealed class MaskViewEffects : MonoBehaviour
 
         if (!masked)
         {
-            // Equipping happens behind the closed eyelids.
+            // Mask changes are immediate.
             masked = true;
             transitioning = false;
             axisRotation = currentRotation = next;
@@ -268,18 +213,6 @@ public sealed class MaskViewEffects : MonoBehaviour
             center - currentRotation * Vector3.forward * distance, currentRotation);
     }
 
-    void OnGUI()
-    {
-        if (eyelid <= 0) return;
-        GUI.depth = -10000;
-        Color old = GUI.color;
-        GUI.color = Color.black;
-        float h = Screen.height * .5f * eyelid + 1;
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, h), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(0, Screen.height - h, Screen.width, h), Texture2D.whiteTexture);
-        GUI.color = old;
-    }
-
     void ReleaseCursor()
     {
         if (!dragging) return;
@@ -291,8 +224,8 @@ public sealed class MaskViewEffects : MonoBehaviour
     public void CancelTransition()
     {
         StopAllCoroutines();
-        if (maskAnimation) maskAnimation.End();
-        eyelid = 0;
+
+
         Busy = false;
         if (masked) FinishTransition();
         ReleaseCursor();

@@ -1,52 +1,48 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// <summary>Original mask during the animation, with a clear first-person view once equipped.</summary>
+/// <summary>Visible original mask in the editor; excluded only from the player's camera at runtime.</summary>
 public sealed class OrnamentMaskView : MonoBehaviour
 {
     [SerializeField] Renderer cosmicOverlay;
     [SerializeField] Light interiorLight;
-    [SerializeField] Vector3 wornPosition = new Vector3(-.052f, -.020f, -.015f);
+    [SerializeField] Vector3 wornPosition = new Vector3(0, -.02f, .09f);
     [SerializeField, Range(0, 1)] float cosmicIntensity = .25f;
     Camera view;
     GameObject mask;
     Renderer[] maskRenderers;
-    MaskEquipAnimation animation;
-    bool animating, equipping;
     CornerMaskTraversalController controller;
     MaterialPropertyBlock properties;
     float amount, pulse;
-    public bool Visible => animation && animation.IsVisible;
+    public bool Visible => mask && mask.activeInHierarchy && maskRenderers != null && view &&
+        System.Array.Exists(maskRenderers, r => r && r.enabled && (view.cullingMask & (1 << r.gameObject.layer)) != 0);
     public void Configure(Camera camera, GameObject originalMask, CornerMaskTraversalController owner)
     {
         view = camera; mask = originalMask; controller = owner;
         view.nearClipPlane = .0015f;
-        view.cullingMask |= 1; // Render the actual package model instead of hiding its layer.
+        // Ignore Raycast is visible in Scene View. Only this player's camera excludes it.
+        view.cullingMask &= ~(1 << 2);
         mask.transform.SetParent(view.transform, false);
         mask.transform.localScale = Vector3.one;
         SetLayer(mask.transform);
         maskRenderers = mask.GetComponentsInChildren<Renderer>(true);
-        foreach (var renderer in maskRenderers) renderer.shadowCastingMode = ShadowCastingMode.Off;
-        animation = MaskEquipAnimation.Attach(view, mask);
+        foreach (var renderer in maskRenderers) { renderer.shadowCastingMode = ShadowCastingMode.Off; renderer.enabled = true; }
         properties ??= new MaterialPropertyBlock();
         FitOverlay();
     }
     public void ApplyState(bool worn)
     {
         if (!mask) return;
-        if (animation) animation.End();
-        animating = false;
-        mask.SetActive(worn); mask.transform.localPosition = wornPosition; mask.transform.localRotation = Quaternion.identity;
-        SetMeshVisible(false);
-        amount = worn ? cosmicIntensity : 0;
+        mask.SetActive(!Application.isPlaying || worn);
+        mask.transform.localPosition = wornPosition; mask.transform.localRotation = Quaternion.identity;
+        SetMeshVisible(true);
+        amount = Application.isPlaying && worn ? cosmicIntensity : 0;
         if (interiorLight) interiorLight.enabled = false;
         ApplyOverlay();
     }
     public void AnimateDonning(float progress, bool equip)
     {
-        if (!animation) return;
-        if (!animating || equipping != equip) { animation.Begin(equip); animating = true; equipping = equip; }
-        animation.SetProgress(progress);
+        // Compatibility for older preview tools. Mask animations have been removed.
     }
     void SetMeshVisible(bool visible)
     {
@@ -78,5 +74,5 @@ public sealed class OrnamentMaskView : MonoBehaviour
         properties.SetFloat("_Aspect", view ? view.aspect : 1.7778f);
         cosmicOverlay.SetPropertyBlock(properties); cosmicOverlay.enabled = amount > .001f;
     }
-    static void SetLayer(Transform node) { node.gameObject.layer = 0; foreach (Transform child in node) SetLayer(child); }
+    static void SetLayer(Transform node) { node.gameObject.layer = 2; foreach (Transform child in node) SetLayer(child); }
 }

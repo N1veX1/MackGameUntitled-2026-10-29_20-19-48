@@ -1199,6 +1199,8 @@ MonoBehaviour:
   playerCamera: {fileID: 6860849312292261997}
   ornamentMask: {fileID: 7533549950176875812}
   mouseSensitivity: 0.11
+  lookSmoothSeconds: 0.045
+  inputAcceleration: 9
   eyesCloseSeconds: 0.42
   eyesHoldSeconds: 0.12
   eyesOpenSeconds: 0.3
@@ -1619,7 +1621,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967291
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -1653,7 +1655,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrnamentMaskView
   cosmicOverlay: {fileID: 1275362947646418948}
   interiorLight: {fileID: 8347524430059082280}
-  wornPosition: {x: -0.052, y: -0.02, z: -0.015}
+  wornPosition: {x: 0, y: -0.02, z: 0.09}
   cosmicIntensity: 0.25
 --- !u!1 &468840159241586928
 GameObject:
@@ -15375,7 +15377,7 @@ GameObject:
   - component: {fileID: 7499102930240610009}
   - component: {fileID: 3904175129488513133}
   - component: {fileID: 3398997224593791261}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Ivory artwork and sharp eye contours
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -15930,7 +15932,7 @@ GameObject:
   - component: {fileID: 4091894227525719219}
   - component: {fileID: 5055444690865564666}
   - component: {fileID: 2753648622935979372}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: Curved black shell with open eyes
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -23909,13 +23911,13 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6961165439222554676}
-  m_Layer: 0
+  m_Layer: 2
   m_Name: "Ornament mask \u2014 original supplied prefab"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &6961165439222554676
 Transform:
   m_ObjectHideFlags: 0
@@ -23925,7 +23927,7 @@ Transform:
   m_GameObject: {fileID: 7533549950176875812}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.052, y: -0.02, z: -0.015}
+  m_LocalPosition: {x: 0, y: -0.02, z: 0.09}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

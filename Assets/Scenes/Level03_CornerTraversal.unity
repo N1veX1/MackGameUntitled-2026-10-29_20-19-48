@@ -26205,7 +26205,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrnamentMaskView
   cosmicOverlay: {fileID: 834107152}
   interiorLight: {fileID: 1848256785}
-  wornPosition: {x: -0.052, y: -0.02, z: -0.015}
+  wornPosition: {x: 0, y: -0.02, z: 0.09}
   cosmicIntensity: 0.25
 --- !u!81 &1175921165
 AudioListener:
@@ -26254,7 +26254,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967291
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -37715,17 +37715,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1175921163}
     m_Modifications:
+    - target: {fileID: 2003249487333270312, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
+      propertyPath: m_Layer
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 2154346909505610791, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2154346909505610791, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_CastShadows
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2321252721121731381, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
+      propertyPath: m_Layer
+      value: 2
+      objectReference: {fileID: 0}
     - target: {fileID: 3719366649468313638, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.052
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3719366649468313638, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_LocalPosition.y
@@ -37733,7 +37741,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3719366649468313638, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.015
+      value: 0.09
       objectReference: {fileID: 0}
     - target: {fileID: 3719366649468313638, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_LocalRotation.w
@@ -37768,12 +37776,16 @@ PrefabInstance:
       value: "Ornament mask \u2014 original supplied prefab"
       objectReference: {fileID: 0}
     - target: {fileID: 4824592042741451878, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
+      propertyPath: m_Layer
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4824592042741451878, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7603962468178231911, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_Enabled
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7603962468178231911, guid: 59cd630c7e5397e4cb6667a27538ae84, type: 3}
       propertyPath: m_CastShadows

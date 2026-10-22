@@ -57,6 +57,7 @@ public sealed class MaskProximityWall : MonoBehaviour
     }
 
     Renderer[] surfaces;
+    RaycastHit[] visibilityHits = new RaycastHit[32];
     Collider[] solids;
     Material[][] originals, transparent;
     bool[] collisionStates;
@@ -267,22 +268,27 @@ public sealed class MaskProximityWall : MonoBehaviour
     // Test the actual game camera, not Scene-view visibility or distance alone.
     public bool CanVisiblyMerge()
     {
-        if (!cameraEffects || !cameraEffects.ViewCamera || surfaces.Length == 0 || !surfaces[0]) return false;
+        if (!cameraEffects || !cameraEffects.ViewCamera || surfaces == null || surfaces.Length == 0 || !surfaces[0]) return false;
         Camera camera = cameraEffects.ViewCamera;
         Bounds bounds = surfaces[0].bounds;
         if (mergeSurface && !FitsBackingProjection(camera, bounds)) return false;
         Vector3 direction = camera.transform.forward;
-        Vector3[] samples = { bounds.center, bounds.center + Vector3.up * bounds.extents.y * .65f,
-            bounds.center - Vector3.up * bounds.extents.y * .65f };
-        foreach (Vector3 point in samples)
+        for (int sample = 0; sample < 3; sample++)
         {
+            Vector3 point = bounds.center;
+            if (sample > 0) point.y += bounds.extents.y * (sample == 1 ? .65f : -.65f);
             Vector3 viewport = camera.WorldToViewportPoint(point);
             if (viewport.z <= 0 || viewport.x < 0 || viewport.x > 1 || viewport.y < 0 || viewport.y > 1) continue;
             Ray ray = camera.ViewportPointToRay(viewport);
             if (!bounds.IntersectRay(ray, out float entry)) continue;
             bool blocked = false;
-            foreach (RaycastHit hit in Physics.RaycastAll(ray, entry + .01f, ~0, QueryTriggerInteraction.Ignore))
+            int count;
+            // Grow only if a dense view fills the reusable buffer; never drop an occluder.
+            while ((count = Physics.RaycastNonAlloc(ray, visibilityHits, entry + .01f, ~0, QueryTriggerInteraction.Ignore)) == visibilityHits.Length)
+                visibilityHits = new RaycastHit[visibilityHits.Length * 2];
+            for (int hitIndex = 0; hitIndex < count; hitIndex++)
             {
+                RaycastHit hit = visibilityHits[hitIndex];
                 bool own = System.Array.IndexOf(solids, hit.collider) >= 0;
                 bool character = player && hit.transform.IsChildOf(player);
                 if (!own && !character && hit.distance < entry - .025f) { blocked = true; break; }
