@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -16,7 +16,8 @@ namespace MaskResize
         [SerializeField, Min(1)] float acceleration = 28;
         [SerializeField] float fallHeight = -8;
         [Header("Resize controls")]
-        [SerializeField, Min(1)] float reach = 14;
+        [Tooltip("Maximum distance to a visible resize target, in metres. Solid obstacles block selection.")]
+        [SerializeField, Min(1)] float reach = 20;
         [SerializeField, Min(.01f)] float sizeStep = .25f;
         [SerializeField, Min(.01f)] float preciseStep = .05f;
         [Header("Эффект растягивания обзора")]
@@ -33,12 +34,19 @@ namespace MaskResize
         string message;
         float messageUntil;
         ResizeObjectMarker targetMarker;
+        ResizableMaskObject observedTarget;
         Texture2D edges;
         GUIStyle small, title, centered;
-        readonly RaycastHit[] aimHits = new RaycastHit[32];
+        readonly RaycastHit[] aimHits = new RaycastHit[128];
         readonly List<ResizableMaskObject> resizingObjects = new List<ResizableMaskObject>();
         static readonly string[] DimensionLabels = { "1 · ДЛИНА", "2 · ВЫСОТА", "3 · ШИРИНА" };
         ResizableMaskObject captionTarget;
+        Vector3 targetHit;
+        int targetSide = 1;
+        ResizeDimension? pendingDimension;
+        readonly Dictionary<ResizableMaskObject,int> activeResizeSides = new Dictionary<ResizableMaskObject,int>();
+        public int TargetSide => targetSide;
+        static bool HalfHeld => Keyboard.current != null && Keyboard.current.eKey.isPressed;
         Vector3Int captionDimensions;
         string dimensionsCaption;
         public bool MaskOn { get; private set; }
@@ -46,6 +54,18 @@ namespace MaskResize
         public ResizableMaskObject Target { get; private set; }
         public Camera PlayerCamera => playerCamera;
         public CharacterController Controller => controller;
+        public bool IsAxisDimmedInHud(ResizeDimension dimension)
+            => Target && Target.ShowLockedAxesInHud && !Target.CanResize(dimension);
+
+        static readonly List<ResizeMaskPlayer> activePlayers = new List<ResizeMaskPlayer>();
+        void OnEnable() { if(!activePlayers.Contains(this)) activePlayers.Add(this); }
+        internal static bool IsStandingOn(ResizableMaskObject platform)
+        {
+            // Also protects platforms the player has stepped onto without ever aiming at them.
+            foreach(var player in activePlayers)
+                if(player && platform.HasStandingPlayer(player.controller)) return true;
+            return false;
+        }
 
         public void Configure(Camera camera, GameObject mask)
         {
@@ -120,48 +140,94 @@ namespace MaskResize
         }
         public void SetMaskState(bool enabled)
         {
-            if (!enabled) StopResizing();
             MaskOn = enabled;
             if (wornMask) wornMask.SetActive(enabled);
             RefreshTarget();
         }
         public void SetDimension(ResizeDimension value)
         {
+            if(HasActiveResize()) { pendingDimension=value==Dimension?(ResizeDimension?)null:value;return; }
+            pendingDimension=null;
             Dimension = value;
             if (targetMarker) targetMarker.SetSelection(MaskOn, Dimension);
         }
+        bool HasActiveResize()
+        {
+            foreach(var item in resizingObjects) if(item && item.isActiveAndEnabled && item.IsResizing) return true;
+            return false;
+        }
         public void RefreshTarget()
         {
-            ResizableMaskObject next = null;
+            ResizableMaskObject next = null,lookedAt=null;
             if (playerCamera)
             {
                 // A freshly moved CharacterController can intercept a downward ray from its own
                 // camera. Skip only our own hierarchy, then use the nearest real obstruction.
                 int count = Physics.RaycastNonAlloc(playerCamera.transform.position, playerCamera.transform.forward,
-                    aimHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    aimHits, Mathf.Max(reach,playerCamera.farClipPlane), Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.PositiveInfinity;
                 if (count < aimHits.Length)
                     for (int i = 0; i < count; i++)
                     {
                         var hit = aimHits[i];
                         if (hit.collider.transform.IsChildOf(transform) || hit.distance >= nearest) continue;
-                        nearest = hit.distance;
-                        next = hit.collider.GetComponentInParent<ResizableMaskObject>();
+                        nearest = hit.distance; targetHit=hit.point;
+                        lookedAt = hit.collider.GetComponentInParent<ResizableMaskObject>();
+                        next=hit.distance<=reach?lookedAt:null;
                     }
             }
             if (next != Target)
             {
                 if (targetMarker) targetMarker.SetSelection(false, Dimension);
+                if(Target) Target.ShowResizeGuide(0,false);
                 Target = next; targetMarker = Target ? Target.GetComponent<ResizeObjectMarker>() : null;
             }
-            if (targetMarker) targetMarker.SetSelection(MaskOn, Dimension);
+            ResizableMaskObject heldByGaze=MaskOn?lookedAt:null;
+            if(observedTarget!=heldByGaze)
+            {
+                if(observedTarget) observedTarget.SetObserved(false);
+                observedTarget=heldByGaze;
+            }
+            // Only the worn mask holds a shape by gaze. Removing it releases that hold
+            // immediately, while an already requested smooth resize is allowed to finish.
+            // Distant visible objects can be held, but editing still requires being in reach.
+            if(observedTarget) observedTarget.SetObserved(true,controller);
+            if(Target)
+            {
+                int guideAxis=Dimension==ResizeDimension.Length?2:Dimension==ResizeDimension.Height?1:0;
+                float offset=Target.transform.InverseTransformPoint(targetHit)[guideAxis]-Target.HalfSplitCoordinate(guideAxis);
+                if(!Target.IsResizing && Mathf.Abs(offset)>.015f)
+                {
+                    int aimedSide=offset<0?-1:1;
+                    targetSide=aimedSide;
+                }
+                int guideSide=Target.IsResizing && activeResizeSides.TryGetValue(Target,out int activeSide)?activeSide:HalfHeld?targetSide:0;
+                if(guideSide!=0) targetSide=guideSide;
+                Target.ShowResizeGuide(guideAxis,MaskOn && Target.CanResize(Dimension),guideSide);
+            }
+            if (targetMarker)
+            {
+                targetMarker.SetSelection(MaskOn, Dimension);
+            }
         }
         public bool ResizeTarget(float delta, out string reason)
+            => ResizeTarget(delta, HalfHeld, out reason);
+        public bool ResizeTarget(float delta, bool chooseSide, out string reason)
         {
             RefreshTarget();
             if (!MaskOn) { reason = "Сначала надень маску: M"; return false; }
-            if (!Target) { reason = "Наведи прицел на объект со знаком ↔"; return false; }
+            if (!Target) { reason = string.Empty; return false; }
+            if(!Target.CanResize(Dimension))
+            { reason=Target.ShowLockedAxesInHud?"Этот размер закреплён. Смотри стрелки на объекте.":string.Empty;return false; }
+            // A new axis/half must not cancel an unfinished smooth movement. Wheel input
+            // on the current operation still accumulates normally.
+            if(pendingDimension.HasValue){reason=string.Empty;return false;}
+            int resizeSide=chooseSide?targetSide:0;
+            if(Target.IsResizing && activeResizeSides.TryGetValue(Target,out int previousSide) && previousSide!=resizeSide)
+            {reason=string.Empty;return false;}
+            Target.SetResizeSide(Dimension, resizeSide);
             if (!Target.RequestResize(Dimension, delta, controller, out reason)) return false;
+            activeResizeSides[Target]=resizeSide;
             if (!resizingObjects.Contains(Target)) resizingObjects.Add(Target);
             return true;
         }
@@ -174,13 +240,14 @@ namespace MaskResize
             for (int i = resizingObjects.Count - 1; i >= 0; i--)
             {
                 var item = resizingObjects[i];
-                if (!item || !item.isActiveAndEnabled) { resizingObjects.RemoveAt(i); continue; }
+                if (!item || !item.isActiveAndEnabled) { if(!ReferenceEquals(item,null))activeResizeSides.Remove(item);resizingObjects.RemoveAt(i); continue; }
                 Vector3 before = item.Size;
                 if (!item.AdvanceResize(deltaTime, out string reason) && !string.IsNullOrEmpty(reason)) ShowMessage(reason);
                 Vector3 change = item.Size - before;
                 growth = Mathf.Max(growth, Mathf.Max(change.x, Mathf.Max(change.y, change.z)));
-                if (!item.IsResizing) resizingObjects.RemoveAt(i);
+                if (!item.IsResizing) { activeResizeSides.Remove(item);resizingObjects.RemoveAt(i); }
             }
+            if(pendingDimension.HasValue && !HasActiveResize()) SetDimension(pendingDimension.Value);
             if (supported && verticalSpeed < 0) verticalSpeed = -2;
             AdvanceResizeView(deltaTime, growth);
         }
@@ -212,6 +279,7 @@ namespace MaskResize
         {
             foreach (var item in resizingObjects) if (item) item.CancelResize();
             resizingObjects.Clear();
+            activeResizeSides.Clear();pendingDimension=null;
         }
         public void SetCheckpoint(Vector3 feet, Quaternion rotation)
         {
@@ -230,12 +298,12 @@ namespace MaskResize
         public void Respawn()
         {
             Teleport(checkpoint, checkpointRotation);
-            ShowMessage("Возвращение на площадку. Размеры объектов сохранены.");
+            ShowMessage("Возвращение на площадку. Без внимания размеры восстанавливаются через 5 секунд.");
         }
         public void CompleteTutorial() { finished = true; }
-        void ShowMessage(string value) { message = value; messageUntil = Time.unscaledTime + 2.5f; }
+        void ShowMessage(string value) { if(string.IsNullOrEmpty(value))return;message = value; messageUntil = Time.unscaledTime + 2.5f; }
         void Capture(bool value) { captured = value; Cursor.lockState = value ? CursorLockMode.Locked : CursorLockMode.None; Cursor.visible = !value; }
-        void OnDisable() { StopResizing(); ResetResizeView(); if (targetMarker) targetMarker.SetSelection(false, Dimension); Capture(false); }
+        void OnDisable() { activePlayers.Remove(this); if(observedTarget) observedTarget.SetObserved(false); if(Target) Target.ShowResizeGuide(0,false); StopResizing(); ResetResizeView(); if (targetMarker) targetMarker.SetSelection(false, Dimension); Capture(false); }
         void OnDestroy() { if (edges) Destroy(edges); }
         void MakeEdges()
         {
@@ -267,19 +335,27 @@ namespace MaskResize
             GUI.DrawTexture(new Rect(24, 24, 380, 78), Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.Label(new Rect(40, 32, 345, 30), "04 / МАСШТАБ", title);
-            GUI.Label(new Rect(40, 66, 345, 30), MaskOn ? "МАСКА НАДЕТА     M — снять" : "M — надеть маску", small);
+            GUI.Label(new Rect(40, 66, 345, 30), MaskOn ? $"МАСКА НАДЕТА · M — снять · до {reach:0} м" : "M — надеть маску", small);
             GUI.color = MaskOn && Target ? new Color(.3f, 1, .9f) : Color.white;
             GUI.DrawTexture(new Rect(w / 2 - 2, h / 2 - 2, 4, 4), Texture2D.whiteTexture);
             GUI.color = new Color(.035f, .055f, .065f, .9f);
             GUI.DrawTexture(new Rect(w / 2 - 320, h - 142, 640, 120), Texture2D.whiteTexture);
             for (int i = 0; i < 3; i++)
             {
-                GUI.color = (int)Dimension == i ? new Color(.35f, 1, .88f) : new Color(.65f, .72f, .75f);
+                bool selected=(int)Dimension==i;
+                float glow=.88f+.12f*Mathf.Sin(Time.unscaledTime*2.2f);
+                GUI.color = IsAxisDimmedInHud((ResizeDimension)i) ? new Color(.3f,.32f,.33f) : selected ? new Color(.35f*glow,glow,.88f*glow) : new Color(.65f, .72f, .75f);
                 GUI.Label(new Rect(w / 2 - 305 + i * 205, h - 133, 200, 28), DimensionLabels[i], centered);
             }
             GUI.color = Color.white;
             GUI.Label(new Rect(w / 2 - 310, h - 99, 620, 27), GetDimensionsCaption(), centered);
-            GUI.Label(new Rect(w / 2 - 310, h - 67, 620, 32), "Колесо — размер   ·   Shift — точнее   ·   WASD — ходить", centered);
+            GUI.Label(new Rect(w / 2 - 310, h - 67, 620, 32), "Колесо — размер · Зажми E — менять половину · Shift — точнее", centered);
+            if(MaskOn && Target)
+            {
+                int axis=Dimension==ResizeDimension.Length?2:Dimension==ResizeDimension.Height?1:0;
+                string label=Dimension==ResizeDimension.Length?"длина":Dimension==ResizeDimension.Height?"высота":"ширина";
+                GUI.Label(new Rect(w/2-320,h-235,640,30),$"Максимальная {label}: {Target.MaxSize[axis]:F2} м",centered);
+            }
             if (Time.unscaledTime < messageUntil) GUI.Label(new Rect(w / 2 - 370, h - 200, 740, 50), message, centered);
             if (finished) GUI.Label(new Rect(w / 2 - 360, 130, 720, 65), "Обучение пройдено. Можно вернуться и менять размеры дальше.", centered);
             if (!captured) GUI.Label(new Rect(w / 2 - 260, h / 2 + 35, 520, 50), "Нажми мышью, чтобы продолжить", centered);
@@ -287,7 +363,7 @@ namespace MaskResize
         }
         string GetDimensionsCaption()
         {
-            if (!Target) { captionTarget = null; return "Знак ↔ отмечает изменяемые объекты"; }
+            if (!Target) { captionTarget = null; return string.Empty; }
             Vector3 size = Target.Size;
             var displayed = new Vector3Int(Mathf.RoundToInt(size.x * 100), Mathf.RoundToInt(size.y * 100), Mathf.RoundToInt(size.z * 100));
             if (captionTarget != Target || captionDimensions != displayed || dimensionsCaption == null)

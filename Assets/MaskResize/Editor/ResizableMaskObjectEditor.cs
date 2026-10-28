@@ -1,4 +1,4 @@
-using UnityEditor;
+﻿using UnityEditor;
 using UnityEngine;
 
 namespace MaskResize.Editor
@@ -11,10 +11,17 @@ namespace MaskResize.Editor
             serializedObject.Update();
             EditorGUILayout.HelpBox("Размер в метрах: X — ширина (3), Y — высота (2), Z — длина (1).\nПоворачивайте и переносите корень. Scale корня и родителей оставьте (1, 1, 1).", MessageType.Info);
             Field("solid", "Геометрия / Solid");
+            Field("thinPlatform", "Тонкий мост с постоянной высотой");
+            if(serializedObject.FindProperty("thinPlatform").boolValue) Field("platformThickness", "Толщина плиты (м)");
             Field("size", "Текущий размер");
             Field("initialSize", "Исходный размер");
             Field("minSize", "Минимальный размер");
             Field("maxSize", "Максимальный размер");
+            Field("showLockedAxesInHud", "Серые размеры в HUD (первые уроки)");
+            Field("returnWhenIdle", "Возвращать без внимания");
+            Field("idleReturnDelay", "Ожидание перед возвратом (сек.)");
+            Field("returnWarningSeconds", "Мигание перед возвратом (сек.)");
+            Field("returnStopSeconds", "Торможение возврата при взгляде (сек.)");
             Field("resizeSmoothSeconds", "Плавность изменения (сек.)");
             Field("maxResizeSpeed", "Скорость изменения (м/сек.)");
             Field("anchorNormalized", "Закреплённая точка");

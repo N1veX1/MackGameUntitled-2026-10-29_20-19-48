@@ -168,9 +168,12 @@ MonoBehaviour:
   lookSmoothing: 0.045
   acceleration: 28
   fallHeight: -8
-  reach: 14
+  reach: 20
   sizeStep: 0.25
   preciseStep: 0.05
+  resizeViewExpansion: 6
+  resizeViewAttack: 0.12
+  resizeViewReturn: 0.35
 --- !u!1 &4541564425713723926
 GameObject:
   m_ObjectHideFlags: 0

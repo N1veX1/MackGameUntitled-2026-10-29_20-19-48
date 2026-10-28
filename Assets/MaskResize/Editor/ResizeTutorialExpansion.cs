@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -65,10 +65,10 @@ namespace MaskResize.Editor
 
             // 05: lift to the next storey, then reduce the wall width to go around it.
             Resizable(objects, "05 Lift", "Платформа — подъём", new Vector3(0, 3, 79.5f),
-                new Vector3(3.2f, .18f, 3), new Vector3(1.2f, .18f, 3), new Vector3(5, 3, 3), Vector3.down * .5f);
+                new Vector3(3.2f, .18f, 3), new Vector3(3.2f, .18f, 3), new Vector3(3.2f, 3, 3), Vector3.down * .5f);
             Box(floors, "05 Upper platform", new Vector3(0, 5.75f, 85.5f), new Vector3(9, .5f, 9), concrete);
             Resizable(objects, "05 Upper wall", "Стена — изменение размеров", new Vector3(0, 6, 85),
-                new Vector3(8.8f, 2.8f, .55f), new Vector3(1.5f, .12f, .3f), new Vector3(8.8f, 3.4f, 2), Vector3.down * .5f);
+                new Vector3(8.8f, 2.8f, .55f), new Vector3(1.5f, 2.8f, .55f), new Vector3(8.8f, 2.8f, .55f), Vector3.down * .5f);
             Board(guidance, "05 / ПОДЪЁМ И ПРОХОД", "Встань на платформу\n2 — подними себя на этаж\nНа этаже наведи на стену\n3 — сузь её и пройди сбоку", new Vector3(-4.42f, 5.3f, 75), Quaternion.Euler(0, -90, 0));
             Checkpoint(checkpoints, "Checkpoint after combined lift", new Vector3(0, 7.4f, 88), new Vector3(0, 6.03f, 88.5f));
 
@@ -126,6 +126,7 @@ namespace MaskResize.Editor
             result.transform.SetPositionAndRotation(position, Quaternion.identity); result.transform.localScale = Vector3.one;
             var component = result.GetComponent<ResizableMaskObject>();
             component.Configure(component.Solid, size, min, max, anchor);
+            component.ConfigureThinPlatform(name.Contains("bridge")||name.Contains("Lift"));
             result.GetComponent<ResizeObjectMarker>().SendMessage("LateUpdate");
         }
         static void Board(Transform parent, string title, string body, Vector3 position, Quaternion rotation)

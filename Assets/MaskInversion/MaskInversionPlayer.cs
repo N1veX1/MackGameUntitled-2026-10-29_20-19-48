@@ -20,7 +20,6 @@ public sealed class MaskInversionPlayer : MonoBehaviour
     [Header("Head attachment")]
     [SerializeField] Vector3 wornMaskLocalPosition = new Vector3(0f, -.016f, .055f);
     [Header("Respawn fade only")]
-    [SerializeField, HideInInspector] float closeSeconds = .42f;
     [SerializeField, Min(.05f)] float closedSeconds = .12f;
     [SerializeField, Min(.05f)] float openSeconds = .3f;
     [Header("Mask screen effect")]

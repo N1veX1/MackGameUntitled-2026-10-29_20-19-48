@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -137,7 +137,7 @@ namespace MaskResize.Editor
         static void UpAndDown()
         {
             Floor("Входная площадка", 0, 4, 0);
-            Item("12 High lift", new Vector3(0, 0, 5.5f), new Vector3(3.2f, 3, 3), new Vector3(1.4f, .18f, 3), new Vector3(4, 3, 3), Vector3.down * .5f);
+            Item("12 High lift", new Vector3(0, 0, 5.5f), new Vector3(3.2f, 3, 3), new Vector3(3.2f, .18f, 3), new Vector3(3.2f, 3, 3), Vector3.down * .5f);
             Box(floors, "12 Upper island", new Vector3(0, 2.75f, 8.5f), new Vector3(4, .5f, 3), concrete);
             Item("12 Descending bridge", new Vector3(0, 0, 10), new Vector3(1.4f, 3, 2), new Vector3(.8f, .18f, 1), new Vector3(8.8f, 3, 8), new Vector3(0, -.5f, -.5f));
             Box(floors, "12 Left landing", new Vector3(-3.3f, -.25f, 20), new Vector3(2.4f, .5f, 4), concrete);
@@ -164,7 +164,8 @@ namespace MaskResize.Editor
         {
             var copy = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Kit + "Блок — все размеры.prefab"), puzzles);
             copy.name = name; copy.transform.localPosition = p; copy.transform.localRotation = Quaternion.identity;
-            var component = copy.GetComponent<ResizableMaskObject>(); component.Configure(component.Solid, size, min, max, anchor); return copy.transform;
+            var component = copy.GetComponent<ResizableMaskObject>(); component.Configure(component.Solid, size, min, max, anchor);
+            component.ConfigureThinPlatform(size.y <= min.y + .001f); return copy.transform;
         }
         static void Board(string title, string body, Vector3 p, Quaternion q)
         {

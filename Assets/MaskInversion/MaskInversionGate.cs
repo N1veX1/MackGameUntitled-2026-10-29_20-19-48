@@ -25,10 +25,10 @@ public sealed class MaskInversionGate : MonoBehaviour
     {
         if (subscribed) return;
         // Tutorial-owned gates keep their existing ordered checkpoints and death handling.
-        foreach (var tutorial in FindObjectsByType<MaskInversionTutorial>(FindObjectsSortMode.None))
+        foreach (var tutorial in FindObjectsByType<MaskInversionTutorial>())
             if (tutorial.gameObject.scene == gameObject.scene && tutorial.OwnsGate(this)) return;
         if (!player)
-            foreach (var candidate in FindObjectsByType<MaskInversionPlayer>(FindObjectsSortMode.None))
+            foreach (var candidate in FindObjectsByType<MaskInversionPlayer>())
                 if (candidate.gameObject.scene == gameObject.scene) { player = candidate; break; }
         if (!player) return;
         player.MaskStateChanged += OnMaskChanged; subscribed = true; Apply(player.MaskOn);

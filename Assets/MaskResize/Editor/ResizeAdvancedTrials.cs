@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -88,7 +88,7 @@ namespace MaskResize.Editor
 
             // 10: use two independently anchored platforms to climb two storeys.
             Item(puzzles, "10 First lift", "Платформа — подъём", new Vector3(0, 12, 159.5f),
-                new Vector3(3.2f, .18f, 3), new Vector3(1.4f, .18f, 3), new Vector3(4, 3, 3), Vector3.down * .5f);
+                new Vector3(3.2f, .18f, 3), new Vector3(3.2f, .18f, 3), new Vector3(3.2f, 3, 3), Vector3.down * .5f);
             Box(floors, "10 Intermediate island", new Vector3(0, 14.75f, 162.5f), new Vector3(4, .5f, 3), concrete);
             Item(puzzles, "10 Summit bridge", "Блок — все размеры", new Vector3(0, 12, 164),
                 new Vector3(2.4f, 3, 2), new Vector3(1, 3, 1), new Vector3(8.8f, 6, 8), new Vector3(0, -.5f, -.5f));
@@ -130,6 +130,7 @@ namespace MaskResize.Editor
             var result = Object.Instantiate(source, parent); result.name = name;
             result.transform.SetPositionAndRotation(position, Quaternion.identity); result.transform.localScale = Vector3.one;
             var component = result.GetComponent<ResizableMaskObject>(); component.Configure(component.Solid, size, min, max, anchor);
+            component.ConfigureThinPlatform(size.y <= min.y + .001f);
             result.GetComponent<ResizeObjectMarker>().SendMessage("LateUpdate");
         }
         static void Board(Transform parent, string title, string body, Vector3 position, Quaternion rotation)

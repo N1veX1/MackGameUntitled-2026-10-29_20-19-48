@@ -14,9 +14,9 @@ public sealed class AxisWallAsset : MonoBehaviour
     MaskProximityWall gate;
     void Start()
     {
-        if (!mask) foreach (var item in FindObjectsByType<MaskAxisCamera>(FindObjectsSortMode.None))
+        if (!mask) foreach (var item in FindObjectsByType<MaskAxisCamera>())
             if (item.gameObject.scene == gameObject.scene) { mask = item; break; }
-        if (!player) foreach (var item in FindObjectsByType<MaskDemoPlayer>(FindObjectsSortMode.None))
+        if (!player) foreach (var item in FindObjectsByType<MaskDemoPlayer>())
             if (item.gameObject.scene == gameObject.scene) { player = item; break; }
         if (!mask || !player || !obstacle || !mergeSurface)
         { Debug.LogError("Axis wall needs a player, mask, obstacle and merge surface.", this); enabled = false; return; }

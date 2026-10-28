@@ -25,8 +25,6 @@ public sealed class CornerMaskTraversalController : MonoBehaviour
     [SerializeField] float mouseSensitivity = .11f;
     [SerializeField, Min(.01f)] float lookSmoothSeconds = .045f;
     [SerializeField, Min(1)] float inputAcceleration = 9f;
-    // Legacy serialized timings, unused: mask toggles are instantaneous.
-    [SerializeField, HideInInspector] float eyesCloseSeconds = .42f, eyesHoldSeconds = .12f, eyesOpenSeconds = .3f;
 
     Transform[] nodes;
     float[] lengths;

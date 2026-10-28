@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -82,14 +82,17 @@ namespace MaskResize.Editor
             sun.transform.rotation = Quaternion.Euler(45, -25, 0); sun.shadows = LightShadows.Soft;
 
             var bridge = Resizable("Resize Bridge", props, new Vector3(0, 0, 8), new Vector3(3, .35f, 2),
-                new Vector3(1.2f, .15f, 1), new Vector3(5, 1, 10), new Vector3(0, .5f, -.5f));
+                new Vector3(3, .35f, 1), new Vector3(3, .35f, 10), new Vector3(0, .5f, -.5f));
             var wall = Resizable("Resize Wall", props, new Vector3(0, 0, 28), new Vector3(8.8f, 3.2f, .55f),
-                new Vector3(1.5f, .12f, .3f), new Vector3(8.8f, 4.3f, 3), new Vector3(0, -.5f, 0));
+                new Vector3(1.5f, 3.2f, .55f), new Vector3(8.8f, 3.2f, .55f), new Vector3(0, -.5f, 0));
             var lift = Resizable("Resize Lift", props, new Vector3(0, 0, 39.5f), new Vector3(3.2f, .18f, 3),
-                new Vector3(1.2f, .18f, 1.5f), new Vector3(5, 3, 3), new Vector3(0, -.5f, 0));
+                new Vector3(3.2f, .18f, 3), new Vector3(3.2f, 3, 3), new Vector3(0, -.5f, 0));
             SaveReusable(bridge.gameObject, "Пол — удлиняемый мост");
             SaveReusable(wall.gameObject, "Стена — изменение размеров");
             SaveReusable(lift.gameObject, "Платформа — подъём");
+            bridge.ConfigureIntroductoryHints(true);
+            wall.ConfigureIntroductoryHints(true);
+            lift.ConfigureIntroductoryHints(true);
             var block = Resizable("Настраиваемый блок", null, Vector3.zero, new Vector3(2, 2, 2),
                 Vector3.one * .2f, Vector3.one * 8, new Vector3(0, -.5f, 0));
             SaveReusable(block.gameObject, "Блок — все размеры"); Object.DestroyImmediate(block.gameObject);
@@ -97,7 +100,7 @@ namespace MaskResize.Editor
             Board(guidance, "01 / ДЛИНА", "M — надень маску\nНаведи прицел на мост\n1 — длина · колесо вверх\nДотяни мост до площадки", new Vector3(-4.42f, 2.4f, 5), Quaternion.Euler(0, -90, 0));
             Board(guidance, "02 / ШИРИНА", "3 — ширина\nКолесо вниз — уменьшить\nСузь стену и обойди сбоку", new Vector3(-4.42f, 2.4f, 23), Quaternion.Euler(0, -90, 0));
             Board(guidance, "03 / ВЫСОТА", "Встань на низкую платформу\nПосмотри вниз · 2 — высота\nКолесо вверх — поднимись\nПол под ногами поднимет тебя", new Vector3(-4.42f, 2.5f, 35), Quaternion.Euler(0, -90, 0));
-            Board(guidance, "МАСШТАБ / 04", "Стрелки отмечают изменяемые объекты\n1 — длина · 2 — высота · 3 — ширина\nShift + колесо — точное изменение\nСнятая маска сохраняет результат", new Vector3(4.42f, 2.5f, 2.8f), Quaternion.Euler(0, 90, 0));
+            Board(guidance, "МАСШТАБ / 04", "Стрелки отмечают изменяемые объекты\n1 — длина · 2 — высота · 3 — ширина\nShift + колесо — точное изменение\nБез взгляда 5 сек. — возврат формы", new Vector3(4.42f, 2.5f, 2.8f), Quaternion.Euler(0, 90, 0));
             Board(guidance, "ОБУЧЕНИЕ ПРОЙДЕНО", "Теперь ты управляешь размерами\nМожно вернуться к любому объекту", new Vector3(0, 5.1f, 55.94f), Quaternion.identity);
             foreach (float z in new[] { 7.6f, 18.4f, 37.6f })
                 Box(guidance, "Gap edge marking", new Vector3(0, .012f, z), new Vector3(8.7f, .018f, .1f), amber, false);
@@ -139,6 +142,7 @@ namespace MaskResize.Editor
             var root = Group(name, parent); root.position = anchor;
             var solid = Box(root, "Solid", Vector3.zero, Vector3.one, resizeSurface).transform;
             var item = root.gameObject.AddComponent<ResizableMaskObject>(); item.Configure(solid, initial, min, max, fixedFace);
+            if(name=="Resize Bridge"||name=="Resize Lift") item.ConfigureThinPlatform(true);
             var signs = new Transform[6];
             for (int i = 0; i < signs.Length; i++)
             {
@@ -147,10 +151,7 @@ namespace MaskResize.Editor
                 var renderer = signs[i].gameObject.AddComponent<MeshRenderer>(); renderer.sharedMaterial = cyan;
                 renderer.shadowCastingMode = ShadowCastingMode.Off;
             }
-            var outline = Group("Selection outline", root).gameObject.AddComponent<LineRenderer>();
-            outline.sharedMaterial = cyan; outline.useWorldSpace = false; outline.widthMultiplier = .022f;
-            outline.shadowCastingMode = ShadowCastingMode.Off; outline.receiveShadows = false;
-            root.gameObject.AddComponent<ResizeObjectMarker>().Configure(item, signs, outline);
+            root.gameObject.AddComponent<ResizeObjectMarker>().Configure(item, signs, null);
             return item;
         }
         static void Checkpoint(Transform parent, string name, Vector3 position, Vector3 feet, bool finish)

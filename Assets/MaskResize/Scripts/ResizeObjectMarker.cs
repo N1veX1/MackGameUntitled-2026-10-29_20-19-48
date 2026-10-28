@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace MaskResize
 {
@@ -13,29 +13,29 @@ namespace MaskResize
         Renderer solidRenderer;
         bool selected;
         bool selectionApplied;
+        ResizeIconAxes lastAxes = (ResizeIconAxes)(-1);
         Vector3 lastSize = Vector3.negativeInfinity;
         Vector3 lastCenter = Vector3.negativeInfinity;
-        static readonly int[] EdgeWalk = { 0, 1, 2, 3, 0, 4, 5, 1, 5, 6, 2, 6, 7, 3, 7, 4 };
-        readonly Vector3[] corners = new Vector3[8];
-        readonly Vector3[] outlinePoints = new Vector3[16];
+        void OnDisable() { if(outline) outline.enabled=false; }
         public void Configure(ResizableMaskObject target, Transform[] signs, LineRenderer bounds)
         {
             owner = target; surfaceSigns = signs; outline = bounds;
-            solidRenderer = null; selectionApplied = false;
-            SetSelection(false, ResizeDimension.Length); UpdateGeometry();
+            solidRenderer = null; selectionApplied = false; lastAxes = (ResizeIconAxes)(-1);
+            SetSelection(false, ResizeDimension.Length); RefreshIcons(); UpdateGeometry();
         }
         void OnEnable()
         {
             if (!owner) owner = GetComponent<ResizableMaskObject>();
             lastSize = Vector3.negativeInfinity;
             selectionApplied = false;
-            SetSelection(false, ResizeDimension.Length); UpdateGeometry();
+            lastAxes = (ResizeIconAxes)(-1);
+            SetSelection(false, ResizeDimension.Length); RefreshIcons(); UpdateGeometry();
         }
         public void SetSelection(bool value, ResizeDimension dimension)
         {
             bool changed = !selectionApplied || selected != value;
             selected = value;
-            if (outline && outline.enabled != value) outline.enabled = value;
+            if (outline) outline.enabled = false;
             if (!changed) return;
             if (owner && owner.Solid)
             {
@@ -50,11 +50,33 @@ namespace MaskResize
                 }
             }
         }
-        void LateUpdate() { UpdateGeometry(); }
+        void LateUpdate() { RefreshIcons(); UpdateGeometry(); }
+        public void RefreshIcons()
+        {
+            var axes = ResizeIconLibrary.For(owner);
+            if (axes == lastAxes) return;
+            var mesh = ResizeIconLibrary.Quad;
+            var material = ResizeIconLibrary.Get(axes);
+            if (!mesh || (axes != ResizeIconAxes.None && !material)) return;
+            if (surfaceSigns != null) foreach (var sign in surfaceSigns)
+            {
+                if (!sign) continue;
+                var filter = sign.GetComponent<MeshFilter>();
+                var renderer = sign.GetComponent<MeshRenderer>();
+                if (filter) filter.sharedMesh = mesh;
+                if (renderer)
+                {
+                    renderer.sharedMaterial = material;
+                    renderer.enabled = axes != ResizeIconAxes.None;
+                    renderer.receiveShadows = false;
+                }
+            }
+            lastAxes = axes;
+        }
         void UpdateGeometry()
         {
             if (!owner || !owner.Solid) return;
-            Vector3 size = owner.Size, center = owner.Solid.localPosition;
+            Vector3 size = owner.GeometrySize, center = owner.Solid.localPosition;
             if (size == lastSize && center == lastCenter) return;
             lastSize = size; lastCenter = center;
             Vector3 half = size * .5f;
@@ -67,20 +89,7 @@ namespace MaskResize
                 Sign(4, center + Vector3.left * (half.x + .018f), Vector3.left, Vector3.up, Mathf.Min(size.z, size.y));
                 Sign(5, center + Vector3.right * (half.x + .018f), Vector3.right, Vector3.up, Mathf.Min(size.z, size.y));
             }
-            if (!outline) return;
-            half += Vector3.one * .012f;
-            corners[0] = center + new Vector3(-half.x, -half.y, -half.z);
-            corners[1] = center + new Vector3( half.x, -half.y, -half.z);
-            corners[2] = center + new Vector3( half.x, -half.y,  half.z);
-            corners[3] = center + new Vector3(-half.x, -half.y,  half.z);
-            corners[4] = center + new Vector3(-half.x,  half.y, -half.z);
-            corners[5] = center + new Vector3( half.x,  half.y, -half.z);
-            corners[6] = center + new Vector3( half.x,  half.y,  half.z);
-            corners[7] = center + new Vector3(-half.x,  half.y,  half.z);
-            outline.positionCount = EdgeWalk.Length;
-            for (int i = 0; i < EdgeWalk.Length; i++) outlinePoints[i] = corners[EdgeWalk[i]];
-            outline.SetPositions(outlinePoints);
-            outline.enabled = selected;
+
         }
         void Sign(int i, Vector3 position, Vector3 normal, Vector3 up, float available)
         {

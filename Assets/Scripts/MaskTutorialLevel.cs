@@ -7,7 +7,6 @@ public sealed class MaskTutorialLevel : MonoBehaviour
     [SerializeField] private MaskAxisCamera mask;
     [SerializeField] private Transform player;
     [SerializeField] private float approachZ = 0.25f;
-    [SerializeField] private float exitZ = 12.2f;
     [SerializeField] private Color purple = new Color(.64f, .39f, 1f);
 
     [Header("World instructions")]
@@ -20,7 +19,6 @@ public sealed class MaskTutorialLevel : MonoBehaviour
     private GUIStyle statusStyle;
 
     private static readonly string[] Directions = { "1  X / -X", "2  Y / -Y", "3  Z / -Z" };
-    [SerializeField, Min(2f)] private float testSpacing = 4f;
     private readonly MaskProximityWall[] gates = new MaskProximityWall[3];
     private readonly float[] gateZ = new float[3];
     [Header("Assigned scene obstacles; independent of object names")]
