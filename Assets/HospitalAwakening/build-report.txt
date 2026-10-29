@@ -1,0 +1,5 @@
+SUCCESS
+Scene: Assets/Scenes/Main game scene/GOSPITOL CHAPTER 1 AWAKING.unity
+Glass panels: 24
+Objects: 1280
+Built: 29.10.2026 21:21:28
